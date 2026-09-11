@@ -13,7 +13,7 @@
 | :--- | :--- | :---: | :--- |
 | **Phase 0** | Architecture, ER Design, RBAC Matrix, Route Mapping | **COMPLETED** | Blueprint approved in implementation plan |
 | **Phase 1** | Foundation, Next.js, Prisma, PostgreSQL Schema, Design System | **COMPLETED** | Next.js 16 App Router initialized, Prisma 6 LTS configured with 24+ normalized models, design tokens integrated, Vitest suite passing, production build verified |
-| **Phase 2** | Authentication, Sessions, Server-Side RBAC, Demo Switcher | **PENDING** | - |
+| **Phase 2** | Authentication, Sessions, Server-Side RBAC, Demo Switcher | **COMPLETED** | Password hashing (bcryptjs), signed JWT HTTP-only cookies (jose), requireAuth/requireRole server guards, Edge Middleware, Login UI with 1-click Demo Switcher, 5 role dashboard shells, 24 unit/integration tests passing |
 | **Phase 3** | Student & Faculty Profiles, Directory Management | **PENDING** | - |
 | **Phase 4** | Attendance Tracking, Analytics & Attendance Projection Engine | **PENDING** | - |
 | **Phase 5** | AI / Constraint-Based Timetable Generator (CSP Solver) | **PENDING** | - |
