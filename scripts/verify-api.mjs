@@ -141,6 +141,153 @@ async function runTests() {
   const unauthProfRes = await fetch(`${BASE_URL}/api/profile`);
   assert(unauthProfRes.status === 401, "Unauthenticated /api/profile returns HTTP 401");
 
+  // --- PHASE 4 ATTENDANCE TESTS ---
+  console.log("\n--- Phase 4 Attendance Tests ---");
+
+  // Test A1: Unauthenticated request to student attendance is rejected
+  const unauthAttRes = await fetch(`${BASE_URL}/api/attendance/student`);
+  assert(unauthAttRes.status === 401, "Unauthenticated /api/attendance/student returns HTTP 401");
+
+  // Test A2: Student can fetch own attendance summary & projection
+  const studentAttRes = await fetch(`${BASE_URL}/api/attendance/student`, {
+    headers: { Cookie: studentCookie },
+  });
+  const studentAttData = await studentAttRes.json();
+  assert(studentAttRes.status === 200, "Student fetches attendance summary (HTTP 200)");
+  assert(typeof studentAttData.summary.overallPercentage === "number", "Overall percentage is numeric");
+  assert(studentAttData.summary.projection !== undefined, "Mathematical projection engine is present");
+  assert(studentAttData.summary.subjectBreakdown.length > 0, "Subject-wise breakdown returned");
+
+  // Test A3: Student cannot access faculty subject list (RBAC 403)
+  const studentFacSubjRes = await fetch(`${BASE_URL}/api/attendance/faculty-subjects`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(studentFacSubjRes.status === 403, "Student blocked from faculty subjects (HTTP 403)");
+
+  // Test A4: Faculty can access assigned subjects
+  const facSubjRes = await fetch(`${BASE_URL}/api/attendance/faculty-subjects`, {
+    headers: { Cookie: facultyCookie },
+  });
+  const facSubjData = await facSubjRes.json();
+  assert(facSubjRes.status === 200, "Faculty fetches assigned subjects (HTTP 200)");
+  assert(facSubjData.subjects.length > 0, "Assigned subjects returned for faculty");
+
+  // Test A5: Student cannot mark attendance (RBAC 403)
+  const studentMarkRes = await fetch(`${BASE_URL}/api/attendance/mark`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({
+      facultySubjectId: "fs-dbms-div-a",
+      divisionId: "div-comp-a",
+      date: "2026-10-05",
+      periodNumber: 1,
+      topicCovered: "Unauthorized student submission",
+      records: [{ studentId: "demo-student-001", status: "PRESENT" }],
+    }),
+  });
+  assert(studentMarkRes.status === 403, "Student cannot mark attendance (HTTP 403)");
+
+  // Test A6: Faculty cannot access sheet for unassigned subject (HTTP 403)
+  const unassignedSheetRes = await fetch(
+    `${BASE_URL}/api/attendance/sheet?facultySubjectId=unassigned-id-99&divisionId=div-comp-a&date=2026-10-05&period=1`,
+    { headers: { Cookie: facultyCookie } }
+  );
+  assert(unassignedSheetRes.status === 403, "Faculty cannot access unauthorized subject sheet (HTTP 403)");
+
+  // Test A7: Faculty can load authorized attendance sheet
+  const sheetRes = await fetch(
+    `${BASE_URL}/api/attendance/sheet?facultySubjectId=fs-dbms-div-a&divisionId=div-comp-a&date=2026-10-15&period=3`,
+    { headers: { Cookie: facultyCookie } }
+  );
+  const sheetData = await sheetRes.json();
+  assert(sheetRes.status === 200, "Faculty loads authorized attendance sheet (HTTP 200)");
+  assert(sheetData.sheet.roster.length > 0, "Enrolled students loaded in sheet roster");
+
+  // Test A8: Faculty marks attendance for session
+  const randomDay = String(Math.floor(Math.random() * 25) + 1).padStart(2, "0");
+  const liveSessionDate = `2026-11-${randomDay}`;
+  const liveSessionPeriod = (Math.floor(Math.random() * 5) + 1);
+  const markRes = await fetch(`${BASE_URL}/api/attendance/mark`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: facultyCookie },
+    body: JSON.stringify({
+      facultySubjectId: "fs-dbms-div-a",
+      divisionId: "div-comp-a",
+      date: liveSessionDate,
+      periodNumber: liveSessionPeriod,
+      topicCovered: "Transaction ACID Properties and Concurrency Control",
+      records: [
+        { studentId: "demo-student-001", status: "PRESENT" },
+        { studentId: "demo-student-002", status: "ABSENT" },
+        { studentId: "demo-student-003", status: "PRESENT" },
+        { studentId: "demo-student-004", status: "PRESENT" },
+      ],
+    }),
+  });
+  const markData = await markRes.json();
+  assert(markRes.status === 200, "Faculty marks attendance session (HTTP 200)");
+  assert(markData.result.recordsMarked === 4, "Records marked count verified");
+
+  // Test A9: Duplicate attendance submission rejected (HTTP 409)
+  const dupMarkRes = await fetch(`${BASE_URL}/api/attendance/mark`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: facultyCookie },
+    body: JSON.stringify({
+      facultySubjectId: "fs-dbms-div-a",
+      divisionId: "div-comp-a",
+      date: liveSessionDate,
+      periodNumber: liveSessionPeriod,
+      topicCovered: "Duplicate Session Try",
+      records: [{ studentId: "demo-student-001", status: "PRESENT" }],
+    }),
+  });
+  assert(dupMarkRes.status === 409, "Duplicate attendance rejected with conflict (HTTP 409)");
+
+  // Test A10: Faculty analytics and at-risk query
+  const analyticsRes = await fetch(
+    `${BASE_URL}/api/attendance/analytics?facultySubjectId=fs-dbms-div-a`,
+    { headers: { Cookie: facultyCookie } }
+  );
+  const analyticsData = await analyticsRes.json();
+  assert(analyticsRes.status === 200, "Faculty fetches subject analytics (HTTP 200)");
+  assert(typeof analyticsData.analytics.avgPercentage === "number", "Class attendance average is computed");
+  assert(Array.isArray(analyticsData.analytics.atRiskStudents), "Students at risk array returned");
+
+  // Test A11: Student cannot edit attendance (HTTP 403)
+  const studentEditRes = await fetch(`${BASE_URL}/api/attendance/rec-1`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({
+      status: "PRESENT",
+      reasonForEdit: "Student attempting unauthorized status change",
+    }),
+  });
+  assert(studentEditRes.status === 403, "Student blocked from editing attendance (HTTP 403)");
+
+  // Test A12: Faculty edit requires mandatory audit reason (HTTP 400)
+  const emptyReasonEditRes = await fetch(`${BASE_URL}/api/attendance/rec-1`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: facultyCookie },
+    body: JSON.stringify({
+      status: "PRESENT",
+      reasonForEdit: "   ", // Blank
+    }),
+  });
+  assert(emptyReasonEditRes.status === 400, "Edit without reason rejected (HTTP 400)");
+
+  // Test A13: Faculty successfully edits past record with audit trail
+  const validEditRes = await fetch(`${BASE_URL}/api/attendance/rec-1`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: facultyCookie },
+    body: JSON.stringify({
+      status: "PRESENT",
+      reasonForEdit: "Approved official representation at Inter-College Hackathon.",
+    }),
+  });
+  const validEditData = await validEditRes.json();
+  assert(validEditRes.status === 200, "Faculty edits record with audit log (HTTP 200)");
+  assert(validEditData.result.newStatus === "PRESENT", "Status updated to PRESENT");
+
   console.log("\n==================================================");
   console.log(`FINAL RESULT: ${passed} PASSED, ${failed} FAILED`);
   console.log("==================================================");
