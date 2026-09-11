@@ -8,7 +8,9 @@ import {
   TrendingUp,
   Activity,
   Sparkles,
+  ArrowRight,
 } from "lucide-react";
+import Link from "next/link";
 
 export default async function AdminDashboardPage() {
   const user = await requireRole([Role.ADMIN]);
@@ -74,24 +76,33 @@ export default async function AdminDashboardPage() {
         </div>
 
         {/* Timetable Engine */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Timetable Status
-            </span>
-            <div className="h-8 w-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center dark:bg-purple-950/60 dark:text-purple-400">
-              <CalendarDays className="h-4 w-4" />
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Timetable Engine
+              </span>
+              <div className="h-8 w-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center dark:bg-purple-950/60 dark:text-purple-400">
+                <CalendarDays className="h-4 w-4" />
+              </div>
+            </div>
+            <div className="mt-3 flex items-baseline gap-2">
+              <span className="text-3xl font-extrabold text-slate-900 dark:text-white">v1 Active</span>
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                0 Conflicts
+              </span>
+            </div>
+            <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              17 Sessions &bull; 94% Soft Score
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-slate-900 dark:text-white">Active</span>
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-              0 Conflicts
-            </span>
-          </div>
-          <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-            CSP Solver Engine Ready
-          </div>
+          <Link
+            href="/dashboard/admin/timetable"
+            className="mt-3 text-xs font-bold text-primary hover:underline inline-flex items-center gap-1"
+          >
+            Launch CSP Generator
+            <ArrowRight className="h-3 w-3" />
+          </Link>
         </div>
 
         {/* System Security */}

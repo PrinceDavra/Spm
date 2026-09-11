@@ -1,6 +1,7 @@
 import { Role } from "@prisma/client";
 import { requireRole } from "@/lib/auth/rbac";
 import { AttendanceService } from "@/services/attendance.service";
+import { TimetableService } from "@/services/timetable.service";
 import {
   Users,
   ClipboardCheck,
@@ -12,6 +13,7 @@ import {
   TrendingUp,
   ShieldCheck,
   Clock,
+  MapPin,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -20,6 +22,10 @@ export default async function FacultyDashboardPage() {
 
   // Load faculty assigned subjects and live analytics
   const assignedSubjects = await AttendanceService.getFacultySubjects(user.id);
+
+  // Load live faculty timetable
+  const timetableData = await TimetableService.getFacultyTimetable(user.id);
+  const todayTeaching = timetableData.todaySlots;
 
   let primaryAnalytics = null;
   if (assignedSubjects.length > 0) {
@@ -176,6 +182,72 @@ export default async function FacultyDashboardPage() {
             6 lecture periods configured
           </div>
         </div>
+      </div>
+
+      {/* Today's Teaching Schedule Card */}
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-5 w-5 text-primary" />
+            <div>
+              <h2 className="text-base font-bold text-foreground">
+                Today&apos;s Teaching Schedule ({timetableData.todayDay})
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {todayTeaching.length} academic teaching session{todayTeaching.length === 1 ? "" : "s"} assigned today
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/faculty/timetable"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition shadow-sm self-start sm:self-auto"
+          >
+            View Full Teaching Timetable
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        {todayTeaching.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {todayTeaching.map((slot) => (
+              <div
+                key={slot.variableId}
+                className={`p-3.5 rounded-xl border flex flex-col justify-between ${
+                  slot.isLabSession
+                    ? "bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800"
+                    : "bg-muted/40 border-border"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground mb-1">
+                    <span>Period {slot.periodNumber}</span>
+                    <span className="font-mono">{slot.startTime} – {slot.endTime}</span>
+                  </div>
+                  <div className="text-xs font-mono font-bold text-primary">
+                    {slot.subjectCode}
+                  </div>
+                  <div className="text-sm font-bold text-foreground line-clamp-1 mt-0.5">
+                    {slot.subjectName}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-muted-foreground border-t border-border/50 pt-2 mt-3">
+                  <span className="font-semibold text-foreground">
+                    {slot.divisionId === "div-comp-a" ? "Division A" : "Division B"}
+                  </span>
+                  <span className="flex items-center gap-1 font-semibold text-primary">
+                    <MapPin className="h-3 w-3" />
+                    {slot.roomNumber}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="py-6 text-center text-muted-foreground text-xs">
+            No teaching periods scheduled for today. Use this time for research or grading.
+          </div>
+        )}
       </div>
 
       {/* Assigned Subjects List */}

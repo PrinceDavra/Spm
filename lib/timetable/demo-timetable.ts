@@ -1,0 +1,532 @@
+import { DayOfWeek, RoomType, SubjectType, TimetableStatus } from "@prisma/client";
+import {
+  AcademicSubject,
+  CSPSlotAssignment,
+  FacultyUnavailability,
+  RoomInfo,
+  RoomUnavailability,
+  WorkingScheduleConfig,
+} from "./csp-solver";
+
+export interface DemoTimetableRecord {
+  id: string;
+  divisionId: string;
+  divisionName: string;
+  className: string;
+  semester: number;
+  academicYear: string;
+  status: TimetableStatus;
+  version: number;
+  softScore: number;
+  publishedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  slots: CSPSlotAssignment[];
+}
+
+export const DEMO_WORKING_CONFIG: WorkingScheduleConfig = {
+  workingDays: [
+    DayOfWeek.MONDAY,
+    DayOfWeek.TUESDAY,
+    DayOfWeek.WEDNESDAY,
+    DayOfWeek.THURSDAY,
+    DayOfWeek.FRIDAY,
+  ],
+  periodsPerDay: 6,
+  periodTimings: [
+    { periodNumber: 1, startTime: "09:00", endTime: "10:00" },
+    { periodNumber: 2, startTime: "10:00", endTime: "11:00" },
+    { periodNumber: 3, startTime: "11:15", endTime: "12:15" },
+    { periodNumber: 4, startTime: "12:15", endTime: "01:15" },
+    { periodNumber: 5, startTime: "02:00", endTime: "03:00" },
+    { periodNumber: 6, startTime: "03:00", endTime: "04:00" },
+  ],
+};
+
+export const DEMO_ROOMS: RoomInfo[] = [
+  {
+    id: "room-201",
+    roomNumber: "Room 201",
+    building: "Academic Block A",
+    floor: 2,
+    capacity: 70,
+    type: RoomType.CLASSROOM,
+    hasProjector: true,
+    isAvailable: true,
+  },
+  {
+    id: "room-202",
+    roomNumber: "Room 202",
+    building: "Academic Block A",
+    floor: 2,
+    capacity: 70,
+    type: RoomType.CLASSROOM,
+    hasProjector: true,
+    isAvailable: true,
+  },
+  {
+    id: "room-301",
+    roomNumber: "Room 301",
+    building: "Academic Block B",
+    floor: 3,
+    capacity: 75,
+    type: RoomType.CLASSROOM,
+    hasProjector: true,
+    isAvailable: true,
+  },
+  {
+    id: "lab-1",
+    roomNumber: "Computer Lab 1",
+    building: "IT & Computing Complex",
+    floor: 1,
+    capacity: 40,
+    type: RoomType.LAB,
+    hasProjector: true,
+    isAvailable: true,
+  },
+  {
+    id: "lab-2",
+    roomNumber: "Network Systems Lab 2",
+    building: "IT & Computing Complex",
+    floor: 1,
+    capacity: 40,
+    type: RoomType.LAB,
+    hasProjector: true,
+    isAvailable: true,
+  },
+];
+
+export const DEMO_FACULTY_UNAVAILABILITY: FacultyUnavailability[] = [
+  {
+    facultyId: "demo-faculty-002", // Prof. Arvind Kulkarni
+    dayOfWeek: DayOfWeek.WEDNESDAY,
+    periodNumber: 1,
+    reason: "Department Academic & Research Meeting",
+  },
+  {
+    facultyId: "demo-faculty-002",
+    dayOfWeek: DayOfWeek.WEDNESDAY,
+    periodNumber: 2,
+    reason: "Department Academic & Research Meeting",
+  },
+];
+
+export const DEMO_ROOM_UNAVAILABILITY: RoomUnavailability[] = [
+  {
+    roomId: "lab-2", // Network Systems Lab 2
+    dayOfWeek: DayOfWeek.THURSDAY,
+    periodNumber: 5,
+    reason: "Hardware Maintenance & Server Calibration",
+  },
+  {
+    roomId: "lab-2",
+    dayOfWeek: DayOfWeek.THURSDAY,
+    periodNumber: 6,
+    reason: "Hardware Maintenance & Server Calibration",
+  },
+];
+
+export const DEMO_DIVISION_A_SUBJECTS: AcademicSubject[] = [
+  {
+    id: "subj-dbms",
+    code: "COMP-301",
+    name: "Database Management Systems",
+    type: SubjectType.THEORY,
+    weeklyHours: 4,
+    credits: 4,
+    facultyId: "demo-faculty-001",
+    facultyName: "Prof. Meera Sen",
+    facultySubjectId: "fs-dbms-div-a",
+  },
+  {
+    id: "subj-cn",
+    code: "COMP-302",
+    name: "Computer Networks",
+    type: SubjectType.THEORY,
+    weeklyHours: 3,
+    credits: 4,
+    facultyId: "demo-faculty-001",
+    facultyName: "Prof. Meera Sen",
+    facultySubjectId: "fs-cn-div-a",
+  },
+  {
+    id: "subj-os",
+    code: "COMP-303",
+    name: "Operating Systems",
+    type: SubjectType.THEORY,
+    weeklyHours: 3,
+    credits: 4,
+    facultyId: "demo-faculty-002",
+    facultyName: "Prof. Arvind Kulkarni",
+    facultySubjectId: "fs-os-div-a",
+  },
+  {
+    id: "subj-spm",
+    code: "COMP-304",
+    name: "Software Project Management",
+    type: SubjectType.THEORY,
+    weeklyHours: 3,
+    credits: 3,
+    facultyId: "demo-faculty-003",
+    facultyName: "Dr. Sandeep Joshi",
+    facultySubjectId: "fs-spm-div-a",
+  },
+  {
+    id: "subj-dbms-lab",
+    code: "COMP-305",
+    name: "Database Systems Practical Lab",
+    type: SubjectType.LAB,
+    weeklyHours: 2, // 1 session of 2 periods
+    credits: 2,
+    facultyId: "demo-faculty-001",
+    facultyName: "Prof. Meera Sen",
+    facultySubjectId: "fs-dbms-lab-div-a",
+  },
+  {
+    id: "subj-cn-lab",
+    code: "COMP-306",
+    name: "Computer Networks Practical Lab",
+    type: SubjectType.LAB,
+    weeklyHours: 2, // 1 session of 2 periods
+    credits: 2,
+    facultyId: "demo-faculty-002",
+    facultyName: "Prof. Arvind Kulkarni",
+    facultySubjectId: "fs-cn-lab-div-a",
+  },
+];
+
+// Baseline conflict-free published timetable slots for Division A (17 weekly periods)
+const BASELINE_DIV_A_SLOTS: CSPSlotAssignment[] = [
+  // MONDAY:
+  // P1: DBMS (Meera Sen, Room 201)
+  {
+    variableId: "slot-m1",
+    subjectId: "subj-dbms",
+    subjectCode: "COMP-301",
+    subjectName: "Database Management Systems",
+    facultyId: "demo-faculty-001",
+    facultyName: "Prof. Meera Sen",
+    facultySubjectId: "fs-dbms-div-a",
+    divisionId: "div-comp-a",
+    dayOfWeek: DayOfWeek.MONDAY,
+    periodNumber: 1,
+    roomId: "room-201",
+    roomNumber: "Room 201",
+    isLabSession: false,
+    startTime: "09:00",
+    endTime: "10:00",
+  },
+  // P2: Computer Networks (Meera Sen, Room 201)
+  {
+    variableId: "slot-m2",
+    subjectId: "subj-cn",
+    subjectCode: "COMP-302",
+    subjectName: "Computer Networks",
+    facultyId: "demo-faculty-001",
+    facultyName: "Prof. Meera Sen",
+    facultySubjectId: "fs-cn-div-a",
+    divisionId: "div-comp-a",
+    dayOfWeek: DayOfWeek.MONDAY,
+    periodNumber: 2,
+    roomId: "room-201",
+    roomNumber: "Room 201",
+    isLabSession: false,
+    startTime: "10:00",
+    endTime: "11:00",
+  },
+  // P3: Operating Systems (Arvind Kulkarni, Room 201)
+  {
+    variableId: "slot-m3",
+    subjectId: "subj-os",
+    subjectCode: "COMP-303",
+    subjectName: "Operating Systems",
+    facultyId: "demo-faculty-002",
+    facultyName: "Prof. Arvind Kulkarni",
+    facultySubjectId: "fs-os-div-a",
+    divisionId: "div-comp-a",
+    dayOfWeek: DayOfWeek.MONDAY,
+    periodNumber: 3,
+    roomId: "room-201",
+    roomNumber: "Room 201",
+    isLabSession: false,
+    startTime: "11:15",
+    endTime: "12:15",
+  },
+  // P4: SPM (Sandeep Joshi, Room 201)
+  {
+    variableId: "slot-m4",
+    subjectId: "subj-spm",
+    subjectCode: "COMP-304",
+    subjectName: "Software Project Management",
+    facultyId: "demo-faculty-003",
+    facultyName: "Dr. Sandeep Joshi",
+    facultySubjectId: "fs-spm-div-a",
+    divisionId: "div-comp-a",
+    dayOfWeek: DayOfWeek.MONDAY,
+    periodNumber: 4,
+    roomId: "room-201",
+    roomNumber: "Room 201",
+    isLabSession: false,
+    startTime: "12:15",
+    endTime: "01:15",
+  },
+
+  // TUESDAY:
+  // P1-P2: DBMS Practical Lab (Meera Sen, Computer Lab 1, 2 continuous periods)
+  {
+    variableId: "slot-t1",
+    subjectId: "subj-dbms-lab",
+    subjectCode: "COMP-305",
+    subjectName: "Database Systems Practical Lab",
+    facultyId: "demo-faculty-001",
+    facultyName: "Prof. Meera Sen",
+    facultySubjectId: "fs-dbms-lab-div-a",
+    divisionId: "div-comp-a",
+    dayOfWeek: DayOfWeek.TUESDAY,
+    periodNumber: 1,
+    roomId: "lab-1",
+    roomNumber: "Computer Lab 1",
+    isLabSession: true,
+    startTime: "09:00",
+    endTime: "10:00",
+  },
+  {
+    variableId: "slot-t1-part2",
+    subjectId: "subj-dbms-lab",
+    subjectCode: "COMP-305",
+    subjectName: "Database Systems Practical Lab",
+    facultyId: "demo-faculty-001",
+    facultyName: "Prof. Meera Sen",
+    facultySubjectId: "fs-dbms-lab-div-a",
+    divisionId: "div-comp-a",
+    dayOfWeek: DayOfWeek.TUESDAY,
+    periodNumber: 2,
+    roomId: "lab-1",
+    roomNumber: "Computer Lab 1",
+    isLabSession: true,
+    startTime: "10:00",
+    endTime: "11:00",
+  },
+  // P3: Operating Systems (Arvind Kulkarni, Room 201)
+  {
+    variableId: "slot-t3",
+    subjectId: "subj-os",
+    subjectCode: "COMP-303",
+    subjectName: "Operating Systems",
+    facultyId: "demo-faculty-002",
+    facultyName: "Prof. Arvind Kulkarni",
+    facultySubjectId: "fs-os-div-a",
+    divisionId: "div-comp-a",
+    dayOfWeek: DayOfWeek.TUESDAY,
+    periodNumber: 3,
+    roomId: "room-201",
+    roomNumber: "Room 201",
+    isLabSession: false,
+    startTime: "11:15",
+    endTime: "12:15",
+  },
+  // P4: SPM (Sandeep Joshi, Room 201)
+  {
+    variableId: "slot-t4",
+    subjectId: "subj-spm",
+    subjectCode: "COMP-304",
+    subjectName: "Software Project Management",
+    facultyId: "demo-faculty-003",
+    facultyName: "Dr. Sandeep Joshi",
+    facultySubjectId: "fs-spm-div-a",
+    divisionId: "div-comp-a",
+    dayOfWeek: DayOfWeek.TUESDAY,
+    periodNumber: 4,
+    roomId: "room-201",
+    roomNumber: "Room 201",
+    isLabSession: false,
+    startTime: "12:15",
+    endTime: "01:15",
+  },
+
+  // WEDNESDAY:
+  // Note: Arvind Kulkarni unavailable on Wed P1-P2, so DBMS and CN are scheduled
+  // P1: DBMS (Meera Sen, Room 201)
+  {
+    variableId: "slot-w1",
+    subjectId: "subj-dbms",
+    subjectCode: "COMP-301",
+    subjectName: "Database Management Systems",
+    facultyId: "demo-faculty-001",
+    facultyName: "Prof. Meera Sen",
+    facultySubjectId: "fs-dbms-div-a",
+    divisionId: "div-comp-a",
+    dayOfWeek: DayOfWeek.WEDNESDAY,
+    periodNumber: 1,
+    roomId: "room-201",
+    roomNumber: "Room 201",
+    isLabSession: false,
+    startTime: "09:00",
+    endTime: "10:00",
+  },
+  // P2: Computer Networks (Meera Sen, Room 201)
+  {
+    variableId: "slot-w2",
+    subjectId: "subj-cn",
+    subjectCode: "COMP-302",
+    subjectName: "Computer Networks",
+    facultyId: "demo-faculty-001",
+    facultyName: "Prof. Meera Sen",
+    facultySubjectId: "fs-cn-div-a",
+    divisionId: "div-comp-a",
+    dayOfWeek: DayOfWeek.WEDNESDAY,
+    periodNumber: 2,
+    roomId: "room-201",
+    roomNumber: "Room 201",
+    isLabSession: false,
+    startTime: "10:00",
+    endTime: "11:00",
+  },
+  // P3: SPM (Sandeep Joshi, Room 201)
+  {
+    variableId: "slot-w3",
+    subjectId: "subj-spm",
+    subjectCode: "COMP-304",
+    subjectName: "Software Project Management",
+    facultyId: "demo-faculty-003",
+    facultyName: "Dr. Sandeep Joshi",
+    facultySubjectId: "fs-spm-div-a",
+    divisionId: "div-comp-a",
+    dayOfWeek: DayOfWeek.WEDNESDAY,
+    periodNumber: 3,
+    roomId: "room-201",
+    roomNumber: "Room 201",
+    isLabSession: false,
+    startTime: "11:15",
+    endTime: "12:15",
+  },
+  // P4: Operating Systems (Arvind Kulkarni, Room 201)
+  {
+    variableId: "slot-w4",
+    subjectId: "subj-os",
+    subjectCode: "COMP-303",
+    subjectName: "Operating Systems",
+    facultyId: "demo-faculty-002",
+    facultyName: "Prof. Arvind Kulkarni",
+    facultySubjectId: "fs-os-div-a",
+    divisionId: "div-comp-a",
+    dayOfWeek: DayOfWeek.WEDNESDAY,
+    periodNumber: 4,
+    roomId: "room-201",
+    roomNumber: "Room 201",
+    isLabSession: false,
+    startTime: "12:15",
+    endTime: "01:15",
+  },
+
+  // THURSDAY:
+  // P1: DBMS (Meera Sen, Room 201)
+  {
+    variableId: "slot-th1",
+    subjectId: "subj-dbms",
+    subjectCode: "COMP-301",
+    subjectName: "Database Management Systems",
+    facultyId: "demo-faculty-001",
+    facultyName: "Prof. Meera Sen",
+    facultySubjectId: "fs-dbms-div-a",
+    divisionId: "div-comp-a",
+    dayOfWeek: DayOfWeek.THURSDAY,
+    periodNumber: 1,
+    roomId: "room-201",
+    roomNumber: "Room 201",
+    isLabSession: false,
+    startTime: "09:00",
+    endTime: "10:00",
+  },
+  // P2: Computer Networks (Meera Sen, Room 201)
+  {
+    variableId: "slot-th2",
+    subjectId: "subj-cn",
+    subjectCode: "COMP-302",
+    subjectName: "Computer Networks",
+    facultyId: "demo-faculty-001",
+    facultyName: "Prof. Meera Sen",
+    facultySubjectId: "fs-cn-div-a",
+    divisionId: "div-comp-a",
+    dayOfWeek: DayOfWeek.THURSDAY,
+    periodNumber: 2,
+    roomId: "room-201",
+    roomNumber: "Room 201",
+    isLabSession: false,
+    startTime: "10:00",
+    endTime: "11:00",
+  },
+  // P3-P4: Networks Practical Lab (Arvind Kulkarni, Lab 2, 2 continuous periods)
+  {
+    variableId: "slot-th3",
+    subjectId: "subj-cn-lab",
+    subjectCode: "COMP-306",
+    subjectName: "Computer Networks Practical Lab",
+    facultyId: "demo-faculty-002",
+    facultyName: "Prof. Arvind Kulkarni",
+    facultySubjectId: "fs-cn-lab-div-a",
+    divisionId: "div-comp-a",
+    dayOfWeek: DayOfWeek.THURSDAY,
+    periodNumber: 3,
+    roomId: "lab-2",
+    roomNumber: "Network Systems Lab 2",
+    isLabSession: true,
+    startTime: "11:15",
+    endTime: "12:15",
+  },
+  {
+    variableId: "slot-th3-part2",
+    subjectId: "subj-cn-lab",
+    subjectCode: "COMP-306",
+    subjectName: "Computer Networks Practical Lab",
+    facultyId: "demo-faculty-002",
+    facultyName: "Prof. Arvind Kulkarni",
+    facultySubjectId: "fs-cn-lab-div-a",
+    divisionId: "div-comp-a",
+    dayOfWeek: DayOfWeek.THURSDAY,
+    periodNumber: 4,
+    roomId: "lab-2",
+    roomNumber: "Network Systems Lab 2",
+    isLabSession: true,
+    startTime: "12:15",
+    endTime: "01:15",
+  },
+
+  // FRIDAY:
+  // P1: DBMS (Meera Sen, Room 201)
+  {
+    variableId: "slot-f1",
+    subjectId: "subj-dbms",
+    subjectCode: "COMP-301",
+    subjectName: "Database Management Systems",
+    facultyId: "demo-faculty-001",
+    facultyName: "Prof. Meera Sen",
+    facultySubjectId: "fs-dbms-div-a",
+    divisionId: "div-comp-a",
+    dayOfWeek: DayOfWeek.FRIDAY,
+    periodNumber: 1,
+    roomId: "room-201",
+    roomNumber: "Room 201",
+    isLabSession: false,
+    startTime: "09:00",
+    endTime: "10:00",
+  },
+];
+
+export const DEMO_TIMETABLES_STORE: DemoTimetableRecord[] = [
+  {
+    id: "tt-comp-a-sem6-2024",
+    divisionId: "div-comp-a",
+    divisionName: "Division A",
+    className: "TE Computer Engineering",
+    semester: 6,
+    academicYear: "2024-2025",
+    status: TimetableStatus.PUBLISHED,
+    version: 1,
+    softScore: 94,
+    publishedAt: "2026-09-01T09:00:00.000Z",
+    createdAt: "2026-09-01T08:30:00.000Z",
+    updatedAt: "2026-09-01T09:00:00.000Z",
+    slots: BASELINE_DIV_A_SLOTS,
+  },
+];

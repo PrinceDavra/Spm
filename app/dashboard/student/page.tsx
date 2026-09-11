@@ -1,6 +1,7 @@
 import { Role } from "@prisma/client";
 import { requireRole } from "@/lib/auth/rbac";
 import { AttendanceService } from "@/services/attendance.service";
+import { TimetableService } from "@/services/timetable.service";
 import {
   TrendingUp,
   CalendarDays,
@@ -12,6 +13,7 @@ import {
   ShieldCheck,
   AlertCircle,
   ExternalLink,
+  Clock,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -21,6 +23,11 @@ export default async function StudentDashboardPage() {
   // Fetch real database-backed attendance summary & history
   const summary = await AttendanceService.getStudentSummary(user.id);
   const recentHistory = await AttendanceService.getStudentHistory(user.id);
+
+  // Fetch live timetable data
+  const timetableData = await TimetableService.getStudentTimetable(user.id);
+  const todayLectures = timetableData.todaySlots;
+  const nextLecture = todayLectures[0];
 
   // Lowest attendance subject
   const sortedSubjects = [...summary.subjectBreakdown].sort(
@@ -203,6 +210,67 @@ export default async function StudentDashboardPage() {
             <ExternalLink className="h-3 w-3" />
           </Link>
         </div>
+      </div>
+
+      {/* Live Timetable Today's Schedule Card */}
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-5 w-5 text-primary" />
+            <div>
+              <h2 className="text-base font-bold text-foreground">
+                Today&apos;s Academic Schedule ({timetableData.todayDay})
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Division A &bull; {todayLectures.length} lecture/lab sessions scheduled today
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/student/timetable"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition shadow-sm self-start sm:self-auto"
+          >
+            View Full Weekly Timetable
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        {todayLectures.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {todayLectures.map((slot) => (
+              <div
+                key={slot.variableId}
+                className={`p-3.5 rounded-xl border flex flex-col justify-between ${
+                  slot.isLabSession
+                    ? "bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800"
+                    : "bg-muted/40 border-border"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground mb-1">
+                    <span>Period {slot.periodNumber}</span>
+                    <span className="font-mono">{slot.startTime} – {slot.endTime}</span>
+                  </div>
+                  <div className="text-xs font-mono font-bold text-primary">
+                    {slot.subjectCode}
+                  </div>
+                  <div className="text-sm font-bold text-foreground line-clamp-1 mt-0.5">
+                    {slot.subjectName}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-muted-foreground border-t border-border/50 pt-2 mt-3">
+                  <span className="truncate max-w-[120px]">Prof. {slot.facultyName.split(" ").slice(-1)[0]}</span>
+                  <span className="font-semibold text-foreground">{slot.roomNumber}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="py-6 text-center text-muted-foreground text-xs">
+            No lectures scheduled for today.
+          </div>
+        )}
       </div>
 
       {/* Subject-Wise Attendance Overview & Quick Link */}

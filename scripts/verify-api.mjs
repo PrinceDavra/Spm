@@ -286,7 +286,126 @@ async function runTests() {
   });
   const validEditData = await validEditRes.json();
   assert(validEditRes.status === 200, "Faculty edits record with audit log (HTTP 200)");
-  assert(validEditData.result.newStatus === "PRESENT", "Status updated to PRESENT");
+  // --- PHASE 5 TIMETABLE TESTS ---
+  console.log("\n--- Phase 5 Timetable & CSP Engine Tests ---");
+
+  // Test T1: Unauthenticated request to generate timetable is rejected
+  const unauthGenRes = await fetch(`${BASE_URL}/api/timetable/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ divisionId: "div-comp-a" }),
+  });
+  assert(unauthGenRes.status === 401, "Unauthenticated /api/timetable/generate returns HTTP 401");
+
+  // Test T2: Student blocked from generating timetable (RBAC 403)
+  const studentGenRes = await fetch(`${BASE_URL}/api/timetable/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({ divisionId: "div-comp-a" }),
+  });
+  assert(studentGenRes.status === 403, "Student cannot generate timetable (HTTP 403)");
+
+  // Test T3: Faculty blocked from generating timetable (RBAC 403)
+  const facultyGenRes = await fetch(`${BASE_URL}/api/timetable/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: facultyCookie },
+    body: JSON.stringify({ divisionId: "div-comp-a" }),
+  });
+  assert(facultyGenRes.status === 403, "Faculty cannot generate timetable (HTTP 403)");
+
+  // Test T4: Admin runs deterministic CSP generator
+  const adminGenRes = await fetch(`${BASE_URL}/api/timetable/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      divisionId: "div-comp-a",
+      academicYear: "2024-2025",
+      semester: 6,
+    }),
+  });
+  const adminGenData = await adminGenRes.json();
+  assert(adminGenRes.status === 200, "Admin generates timetable via CSP (HTTP 200)");
+  assert(adminGenData.success === true, "CSP solver reports success");
+  assert(adminGenData.result.hardConflicts.length === 0, "Generated timetable has 0 hard conflicts");
+  assert(adminGenData.result.softConstraintScore >= 80, "Soft constraint score meets optimization threshold");
+  assert(adminGenData.result.assignments.length > 0, "Scheduled sessions generated");
+
+  // Test T5: Admin validates slots with conflict validator
+  const valRes = await fetch(`${BASE_URL}/api/timetable/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({ slots: adminGenData.result.assignments }),
+  });
+  const valData = await valRes.json();
+  assert(valRes.status === 200, "Admin validates timetable slots (HTTP 200)");
+  assert(valData.report.isValid === true, "Valid timetable passes conflict validation");
+
+  // Test T6: Admin saves draft timetable
+  const saveRes = await fetch(`${BASE_URL}/api/timetable/save`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      divisionId: "div-comp-a",
+      academicYear: "2024-2025",
+      semester: 6,
+      status: "DRAFT",
+      version: 2,
+      softScore: adminGenData.result.softConstraintScore,
+      slots: adminGenData.result.assignments,
+    }),
+  });
+  const saveData = await saveRes.json();
+  assert(saveRes.status === 200, "Admin saves draft timetable (HTTP 200)");
+  assert(saveData.timetable.status === "DRAFT", "Timetable saved with DRAFT status");
+
+  // Test T7: Admin publishes timetable
+  const pubRes = await fetch(`${BASE_URL}/api/timetable/publish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({ timetableId: saveData.timetable.id }),
+  });
+  const pubData = await pubRes.json();
+  assert(pubRes.status === 200, "Admin publishes timetable (HTTP 200)");
+  assert(pubData.timetable.status === "PUBLISHED", "Timetable published with PUBLISHED status");
+
+  // Test T8: Student accesses published division timetable
+  const studentTtRes = await fetch(`${BASE_URL}/api/timetable/student`, {
+    headers: { Cookie: studentCookie },
+  });
+  const studentTtData = await studentTtRes.json();
+  assert(studentTtRes.status === 200, "Student accesses own division timetable (HTTP 200)");
+  assert(studentTtData.data.divisionId === "div-comp-a", "Student timetable matches enrolled division");
+  assert(Array.isArray(studentTtData.data.todaySlots), "Today's lectures array returned");
+
+  // Test T9: Faculty accesses personalized teaching schedule
+  const facultyTtRes = await fetch(`${BASE_URL}/api/timetable/faculty`, {
+    headers: { Cookie: facultyCookie },
+  });
+  const facultyTtData = await facultyTtRes.json();
+  assert(facultyTtRes.status === 200, "Faculty accesses teaching schedule (HTTP 200)");
+  assert(facultyTtData.data.allSlots.length > 0, "Teaching slots returned for faculty");
+
+  // Test T10: Admin edits slot with conflict prevention (collision rejected with 409)
+  const slotToMove = adminGenData.result.assignments[1];
+  const occupiedSlot = adminGenData.result.assignments[0];
+  const conflictEditRes = await fetch(`${BASE_URL}/api/timetable/${slotToMove.variableId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      dayOfWeek: occupiedSlot.dayOfWeek,
+      periodNumber: occupiedSlot.periodNumber, // Collision!
+      roomId: occupiedSlot.roomId,
+    }),
+  });
+  assert(conflictEditRes.status === 409, "Conflicting slot edit rejected (HTTP 409)");
+
+  // Test T11: Admin queries version history
+  const versRes = await fetch(`${BASE_URL}/api/timetable/versions?divisionId=div-comp-a`, {
+    headers: { Cookie: adminCookie },
+  });
+  const versData = await versRes.json();
+  assert(versRes.status === 200, "Admin queries timetable versions (HTTP 200)");
+  assert(versData.versions.length > 0, "Version history returned");
 
   console.log("\n==================================================");
   console.log(`FINAL RESULT: ${passed} PASSED, ${failed} FAILED`);

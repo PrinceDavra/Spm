@@ -16,8 +16,8 @@
 | **Phase 2** | Authentication, Sessions, Server-Side RBAC, Demo Switcher | **COMPLETED** | Password hashing (bcryptjs), signed JWT HTTP-only cookies (jose), requireAuth/requireRole server guards, Edge Middleware, Login UI with 1-click Demo Switcher, 5 role dashboard shells, 24 unit/integration tests passing |
 | **Phase 3** | Student & Faculty Profiles, Directory Management | **COMPLETED** | Unified Profile service, GET & PATCH /api/profile, strict server immutability enforcement, Student & Faculty profile UI, header/sidebar integration, 13 security tests passing |
 | **Phase 4** | Attendance Tracking, Analytics & Attendance Projection Engine | **COMPLETED** | Transparent mathematical projection engine, Student Attendance Hub with Recharts, Faculty Attendance Register with bulk marking, duplicate prevention, audited corrections, 21 Vitest integration tests & 45 live HTTP tests passing |
-| **Phase 5** | AI / Constraint-Based Timetable Generator (CSP Solver) | **PENDING** | Next phase |
-| **Phase 6** | Assignments, Submissions & Faculty Grading Drawer | **PENDING** | - |
+| **Phase 5** | AI / Constraint-Based Timetable Generator (CSP Solver) | **COMPLETED** | Deterministic CSP solver (MRV + Degree + Forward Checking + Soft Optimization), conflict detector, draft/publish lifecycle, student/faculty/admin views, 19 integration tests & 66 live HTTP verification checks passing |
+| **Phase 6** | Assignments, Submissions & Faculty Grading Drawer | **PENDING** | Next phase |
 | **Phase 7** | Notices Board & Notification Center | **PENDING** | - |
 | **Phase 8** | Events Discovery, Capacity Management & Registration | **PENDING** | - |
 | **Phase 9** | Club Management & Coordinator Roster Workflows | **PENDING** | - |
@@ -41,7 +41,7 @@
 | **Student Dashboard** | 🟢 Complete | 🟢 Complete | 🟢 Complete | 🟢 Complete | Complete (Integrated) |
 | **Faculty Dashboard** | 🟢 Complete | 🟢 Complete | 🟢 Complete | 🟢 Complete | Complete (Integrated) |
 | **Attendance & Projection** | 🟢 Complete | 🟢 Complete | 🟢 Complete | 🟢 Complete | Complete |
-| **Timetable CSP Engine** | ⚪ | ⚪ | ⚪ | ⚪ | Pending |
+| **Timetable CSP Engine** | 🟢 Complete | 🟢 Complete | 🟢 Complete | 🟢 Complete | Complete |
 | **Assignment Lifecycle** | ⚪ | ⚪ | ⚪ | ⚪ | Pending |
 | **Notices & Push Alerts** | ⚪ | ⚪ | ⚪ | ⚪ | Pending |
 | **Events & RSVPs** | ⚪ | ⚪ | ⚪ | ⚪ | Pending |
