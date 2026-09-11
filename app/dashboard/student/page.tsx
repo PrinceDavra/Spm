@@ -2,6 +2,7 @@ import { Role } from "@prisma/client";
 import { requireRole } from "@/lib/auth/rbac";
 import { AttendanceService } from "@/services/attendance.service";
 import { TimetableService } from "@/services/timetable.service";
+import { AssignmentService } from "@/services/assignment.service";
 import {
   TrendingUp,
   CalendarDays,
@@ -14,6 +15,7 @@ import {
   AlertCircle,
   ExternalLink,
   Clock,
+  BookOpen,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -28,6 +30,12 @@ export default async function StudentDashboardPage() {
   const timetableData = await TimetableService.getStudentTimetable(user.id);
   const todayLectures = timetableData.todaySlots;
   const nextLecture = todayLectures[0];
+
+  // Fetch live assignments data
+  const assignmentsData = await AssignmentService.getStudentAssignments(user.id);
+  const pendingAssignments = assignmentsData.assignments
+    .filter((a) => a.submissionStatus === "NOT_SUBMITTED" || a.submissionStatus === "OVERDUE")
+    .slice(0, 3);
 
   // Lowest attendance subject
   const sortedSubjects = [...summary.subjectBreakdown].sort(
@@ -269,6 +277,73 @@ export default async function StudentDashboardPage() {
         ) : (
           <div className="py-6 text-center text-muted-foreground text-xs">
             No lectures scheduled for today.
+          </div>
+        )}
+      </div>
+
+      {/* Assignment Overview Section */}
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-5 w-5 text-primary" />
+            <div>
+              <h2 className="text-base font-bold text-foreground">
+                Coursework &amp; Assignments
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {assignmentsData.kpi.pending} Pending &bull; {assignmentsData.kpi.dueSoon} Due Soon &bull; {assignmentsData.kpi.submitted} Submitted
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/student/assignments"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition shadow-sm self-start sm:self-auto"
+          >
+            View All Assignments
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        {pendingAssignments.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {pendingAssignments.map((a) => (
+              <Link
+                key={a.id}
+                href={`/dashboard/student/assignments/${a.id}`}
+                className="p-4 rounded-xl border border-border bg-muted/30 hover:bg-muted/60 transition-colors flex flex-col justify-between group"
+              >
+                <div>
+                  <div className="flex items-center justify-between text-xs mb-1.5">
+                    <span className="font-mono font-bold text-primary">{a.subjectCode}</span>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        a.isOverdue
+                          ? "bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300"
+                          : a.isUrgent
+                          ? "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                          : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                      }`}
+                    >
+                      {a.urgencyText}
+                    </span>
+                  </div>
+                  <h4 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-1">
+                    {a.title}
+                  </h4>
+                  <p className="text-xs text-muted-foreground line-clamp-1 mt-1">
+                    {a.description}
+                  </p>
+                </div>
+                <div className="text-[11px] text-muted-foreground pt-3 border-t border-border/50 flex justify-between mt-3">
+                  <span>Prof. {a.facultyName.split(" ").slice(-1)[0]}</span>
+                  <span className="font-semibold text-foreground">{a.maxMarks} Marks</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="py-6 text-center text-muted-foreground text-xs">
+            You&apos;re all caught up! No pending coursework deadlines.
           </div>
         )}
       </div>

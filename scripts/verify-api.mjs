@@ -407,6 +407,221 @@ async function runTests() {
   assert(versRes.status === 200, "Admin queries timetable versions (HTTP 200)");
   assert(versData.versions.length > 0, "Version history returned");
 
+  // --- PHASE 6 ASSIGNMENT MANAGEMENT TESTS ---
+  console.log("\n--- Phase 6 Assignment Management & Submission Tests ---");
+
+  // Test AS1: Unauthenticated access blocked
+  const unauthAsgnRes = await fetch(`${BASE_URL}/api/assignments`);
+  assert(unauthAsgnRes.status === 401, "Unauthenticated /api/assignments returns HTTP 401");
+
+  // Test AS2: Student retrieves assignments hub data
+  const studentAsgnRes = await fetch(`${BASE_URL}/api/assignments`, {
+    headers: { Cookie: studentCookie },
+  });
+  const studentAsgnData = await studentAsgnRes.json();
+  assert(studentAsgnRes.status === 200, "Student accesses enrolled assignments (HTTP 200)");
+  assert(studentAsgnData.kpi && typeof studentAsgnData.kpi.pending === "number", "Student KPI summary returned");
+  assert(Array.isArray(studentAsgnData.assignments), "Assignments array returned for student");
+
+  // Test AS3: Student cannot see DRAFT assignments
+  const studentHasDraft = studentAsgnData.assignments.some((a) => a.status === "DRAFT");
+  assert(!studentHasDraft, "Student cannot see DRAFT assignments in list");
+
+  // Test AS4: Student blocked from creating assignment (HTTP 403)
+  const studentCreateRes = await fetch(`${BASE_URL}/api/assignments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({
+      title: "Illegal Student Assignment",
+      subjectId: "subj-dbms",
+      divisionId: "div-comp-a",
+      description: "Should fail authorization",
+      dueDate: new Date(Date.now() + 86400000).toISOString(),
+    }),
+  });
+  assert(studentCreateRes.status === 403, "Student cannot create assignment (HTTP 403)");
+
+  // Test AS5: Faculty creates new assignment for mapped subject
+  const facultyCreateRes = await fetch(`${BASE_URL}/api/assignments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: facultyCookie },
+    body: JSON.stringify({
+      title: "Distributed Two-Phase Commit & WAL Logging",
+      subjectId: "subj-dbms",
+      divisionId: "div-comp-a",
+      description: "Analyze WAL logs and recovery mechanisms under failure.",
+      instructions: "Submit technical report with write-ahead log diagrams.",
+      maxMarks: 100,
+      dueDate: new Date(Date.now() + 48 * 3600000).toISOString(), // 2 days in future
+      status: "PUBLISHED",
+      allowLateSubmission: true,
+      latePenalty: 10,
+      allowedFileTypes: ["pdf", "docx", "zip"],
+    }),
+  });
+  const facultyCreateData = await facultyCreateRes.json();
+  assert(facultyCreateRes.status === 200, "Faculty creates assignment for mapped subject (HTTP 200)");
+  assert(facultyCreateData.assignment && facultyCreateData.assignment.id, "Assignment ID returned upon creation");
+
+  const createdAsgnId = facultyCreateData.assignment?.id;
+
+  // Test AS6: Faculty blocked from creating assignment for unmapped course
+  const facultyUnmappedRes = await fetch(`${BASE_URL}/api/assignments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: facultyCookie },
+    body: JSON.stringify({
+      title: "Unauthorized OS Assignment by DBMS Faculty",
+      subjectId: "subj-os", // Prof. Meera Sen does NOT teach OS
+      divisionId: "div-comp-a",
+      description: "Should be rejected with 403",
+      dueDate: new Date(Date.now() + 86400000).toISOString(),
+    }),
+  });
+  assert(facultyUnmappedRes.status === 403, "Faculty cannot create assignment for unmapped subject (HTTP 403)");
+
+  // Test AS7: Faculty creates draft assignment
+  const draftCreateRes = await fetch(`${BASE_URL}/api/assignments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: facultyCookie },
+    body: JSON.stringify({
+      title: "Draft Syllabus Case Study",
+      subjectId: "subj-dbms",
+      divisionId: "div-comp-a",
+      description: "Draft syllabus case study undergoing review",
+      dueDate: new Date(Date.now() + 7 * 86400000).toISOString(),
+      status: "DRAFT",
+    }),
+  });
+  const draftCreateData = await draftCreateRes.json();
+  assert(draftCreateRes.status === 200, "Faculty creates draft assignment (HTTP 200)");
+  const draftAsgnId = draftCreateData.assignment?.id;
+
+  // Test AS8: Student blocked from accessing draft assignment detail directly (HTTP 403)
+  const studentDraftDetailRes = await fetch(`${BASE_URL}/api/assignments/${draftAsgnId}`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(studentDraftDetailRes.status === 403, "Student blocked from draft assignment detail (HTTP 403)");
+
+  // Test AS9: Faculty publishes draft assignment
+  const pubAsgnRes = await fetch(`${BASE_URL}/api/assignments/${draftAsgnId}/publish`, {
+    method: "POST",
+    headers: { Cookie: facultyCookie },
+  });
+  const pubAsgnData = await pubAsgnRes.json();
+  assert(pubAsgnRes.status === 200, "Faculty publishes draft assignment (HTTP 200)");
+  assert(pubAsgnData.assignment.status === "PUBLISHED", "Assignment status updated to PUBLISHED");
+
+  // Test AS10: Student retrieves assignment details with dynamic urgency
+  const studentDetailRes = await fetch(`${BASE_URL}/api/assignments/${createdAsgnId}`, {
+    headers: { Cookie: studentCookie },
+  });
+  const studentDetailData = await studentDetailRes.json();
+  assert(studentDetailRes.status === 200, "Student fetches assignment details (HTTP 200)");
+  assert(studentDetailData.canSubmit === true, "Student canSubmit flag is true for open assignment");
+  assert(typeof studentDetailData.urgencyText === "string", "Dynamic urgency string computed");
+
+  // Test AS11: Student submits work on-time
+  const studentSubmitRes = await fetch(`${BASE_URL}/api/assignments/${createdAsgnId}/submit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({
+      fileName: "22COMPA101_2PC_Solution.pdf",
+      fileUrl: "/uploads/assignments/22COMPA101_2PC_Solution.pdf",
+      fileSize: 412000,
+      fileType: "application/pdf",
+      submissionText: "Two-Phase commit coordinator state machine implementation and WAL diagram.",
+    }),
+  });
+  const studentSubmitData = await studentSubmitRes.json();
+  assert(studentSubmitRes.status === 200, "Student submits assignment work on-time (HTTP 200)");
+  assert(studentSubmitData.submission.version === 1, "Submission recorded as version 1");
+  assert(studentSubmitData.submission.isLate === false, "On-time submission marked isLate: false");
+
+  // Test AS12: Student resubmits revised solution
+  const studentResubmitRes = await fetch(`${BASE_URL}/api/assignments/${createdAsgnId}/submit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({
+      fileName: "22COMPA101_2PC_Solution_v2.pdf",
+      fileUrl: "/uploads/assignments/22COMPA101_2PC_Solution_v2.pdf",
+      fileSize: 450000,
+      fileType: "application/pdf",
+      submissionText: "Revised solution including non-blocking 3PC comparison.",
+    }),
+  });
+  const studentResubmitData = await studentResubmitRes.json();
+  assert(studentResubmitRes.status === 200, "Student resubmits revised solution (HTTP 200)");
+  assert(studentResubmitData.submission.version === 2, "Resubmission increments version to 2");
+
+  // Test AS13: Student blocked from viewing submissions roster (HTTP 403)
+  const studentRosterRes = await fetch(`${BASE_URL}/api/assignments/${createdAsgnId}/submissions`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(studentRosterRes.status === 403, "Student blocked from viewing submissions roster (HTTP 403)");
+
+  // Test AS14: Faculty views submissions roster
+  const facultyRosterRes = await fetch(`${BASE_URL}/api/assignments/${createdAsgnId}/submissions`, {
+    headers: { Cookie: facultyCookie },
+  });
+  const facultyRosterData = await facultyRosterRes.json();
+  assert(facultyRosterRes.status === 200, "Faculty views assignment submission roster (HTTP 200)");
+  assert(Array.isArray(facultyRosterData.roster), "Student roster array returned");
+  const studentEntry = facultyRosterData.roster.find((r) => r.studentId === "demo-student-001");
+  assert(studentEntry && studentEntry.submissionStatus === "SUBMITTED", "Student submission reflected in roster");
+
+  const submissionIdToGrade = studentEntry?.submissionId;
+
+  // Test AS15: Student blocked from grading submission (HTTP 403)
+  const studentGradeRes = await fetch(`${BASE_URL}/api/assignments/submissions/${submissionIdToGrade}/grade`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({ marks: 95, feedback: "Student self-grading" }),
+  });
+  assert(studentGradeRes.status === 403, "Student blocked from grading submission (HTTP 403)");
+
+  // Test AS16: Faculty grades submission with marks and feedback
+  const facultyGradeRes = await fetch(`${BASE_URL}/api/assignments/submissions/${submissionIdToGrade}/grade`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: facultyCookie },
+    body: JSON.stringify({
+      marks: 96,
+      feedback: "Exceptional depth on WAL crash recovery and coordinator consensus protocols.",
+    }),
+  });
+  const facultyGradeData = await facultyGradeRes.json();
+  assert(facultyGradeRes.status === 200, "Faculty grades student submission (HTTP 200)");
+  assert(facultyGradeData.submission.status === "GRADED", "Submission status updated to GRADED");
+  assert(facultyGradeData.submission.marksObtained === 96, "Marks obtained persisted");
+
+  // Test AS17: Resubmission blocked after work is graded (HTTP 400)
+  const blockedResubmitRes = await fetch(`${BASE_URL}/api/assignments/${createdAsgnId}/submit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({ submissionText: "Attempting to change graded work" }),
+  });
+  assert(blockedResubmitRes.status === 400, "Resubmission blocked after work has been graded (HTTP 400)");
+
+  // Test AS18: Faculty retrieves performance analytics
+  const asgnAnalyticsRes = await fetch(`${BASE_URL}/api/assignments/analytics`, {
+    headers: { Cookie: facultyCookie },
+  });
+  const asgnAnalyticsData = await asgnAnalyticsRes.json();
+  assert(asgnAnalyticsRes.status === 200, "Faculty retrieves assignment analytics (HTTP 200)");
+  assert(asgnAnalyticsData.analytics && asgnAnalyticsData.analytics.metrics, "Analytics metrics payload present");
+  assert(Array.isArray(asgnAnalyticsData.analytics.scoreDistribution), "Score distribution array present for Recharts");
+
+  // Test AS19: Student blocked from faculty analytics endpoint (HTTP 403)
+  const studentAnalyticsRes = await fetch(`${BASE_URL}/api/assignments/analytics`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(studentAnalyticsRes.status === 403, "Student blocked from faculty analytics endpoint (HTTP 403)");
+
+  // Test AS20: Admin can view assignments
+  const adminAsgnRes = await fetch(`${BASE_URL}/api/assignments`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(adminAsgnRes.status === 200, "Admin can retrieve all institutional assignments (HTTP 200)");
+
   console.log("\n==================================================");
   console.log(`FINAL RESULT: ${passed} PASSED, ${failed} FAILED`);
   console.log("==================================================");
