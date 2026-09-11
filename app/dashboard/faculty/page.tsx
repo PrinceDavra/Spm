@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth/rbac";
 import { AttendanceService } from "@/services/attendance.service";
 import { TimetableService } from "@/services/timetable.service";
 import { AssignmentService } from "@/services/assignment.service";
+import { NoticeService } from "@/services/notice.service";
 import {
   Users,
   ClipboardCheck,
@@ -17,6 +18,7 @@ import {
   MapPin,
   FileText,
   Award,
+  BellRing,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -34,6 +36,15 @@ export default async function FacultyDashboardPage() {
   const facultyAssignments = await AssignmentService.getFacultyAssignments(user.id, user.role);
   const totalPendingGrading = facultyAssignments.reduce((acc, a) => acc + a.pendingGradingCount, 0);
   const totalSubmissions = facultyAssignments.reduce((acc, a) => acc + a.submittedCount, 0);
+
+  // Load faculty notices
+  const { notices: facultyNotices } = await NoticeService.getNotices({
+    userId: user.id,
+    role: Role.FACULTY,
+    departmentId: "dept-comp",
+    limit: 4,
+  });
+  const unreadNoticeCount = await NoticeService.getUnreadCount(user.id, Role.FACULTY, "dept-comp");
 
   let primaryAnalytics = null;
   if (assignedSubjects.length > 0) {
@@ -313,6 +324,66 @@ export default async function FacultyDashboardPage() {
                 </span>
               </div>
             </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* Communication & Faculty Notices Section */}
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+          <div className="flex items-center gap-2">
+            <BellRing className="h-5 w-5 text-primary" />
+            <div>
+              <h2 className="text-base font-bold text-foreground">
+                Institutional Communication &amp; Circulars
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {unreadNoticeCount} unread notices &bull; Circulars and academic notices published across campus
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/faculty/notices"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition shadow-sm self-start sm:self-auto"
+          >
+            Open Notice Center
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {facultyNotices.map((n) => (
+            <div
+              key={n.id}
+              className="p-4 rounded-xl border border-border bg-muted/30 hover:bg-muted/60 transition-colors flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between text-xs mb-1.5">
+                  <span className="font-semibold text-primary">{n.category}</span>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      n.priority === "URGENT"
+                        ? "bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300"
+                        : n.priority === "IMPORTANT"
+                        ? "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                        : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                    }`}
+                  >
+                    {n.priority}
+                  </span>
+                </div>
+                <h4 className="text-sm font-semibold text-foreground line-clamp-2">
+                  {n.title}
+                </h4>
+                <p className="text-xs text-muted-foreground line-clamp-1 mt-1">
+                  {n.summary}
+                </p>
+              </div>
+              <div className="text-[11px] text-muted-foreground pt-3 border-t border-border/50 flex justify-between mt-3">
+                <span>By: {n.authorName.split(" ").slice(-1)[0]}</span>
+                <span>{n.status}</span>
+              </div>
+            </div>
           ))}
         </div>
       </div>

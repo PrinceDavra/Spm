@@ -1,5 +1,6 @@
 import { Role } from "@prisma/client";
 import { requireRole } from "@/lib/auth/rbac";
+import { NoticeService } from "@/services/notice.service";
 import {
   Users,
   Building2,
@@ -9,11 +10,13 @@ import {
   Activity,
   Sparkles,
   ArrowRight,
+  BellRing,
 } from "lucide-react";
 import Link from "next/link";
 
 export default async function AdminDashboardPage() {
   const user = await requireRole([Role.ADMIN]);
+  const noticeAnalytics = await NoticeService.getNoticeAnalytics(user.id, Role.ADMIN);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -120,6 +123,56 @@ export default async function AdminDashboardPage() {
           </div>
           <div className="mt-2 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
             Edge Guard &bull; Server Token Verified
+          </div>
+        </div>
+      </div>
+
+      {/* Notice Center Overview Section */}
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+          <div className="flex items-center gap-2">
+            <BellRing className="h-5 w-5 text-primary" />
+            <div>
+              <h2 className="text-base font-bold text-foreground">
+                Notice Center &amp; Institutional Circulars
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Broadcast governance, reach telemetry, and active circular distribution
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/admin/notices"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition shadow-sm self-start sm:self-auto"
+          >
+            Manage All Notices
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-1">
+            <div className="text-xs font-semibold text-muted-foreground">Published Circulars</div>
+            <div className="text-2xl font-extrabold text-foreground">{noticeAnalytics.metrics.published}</div>
+            <div className="text-[11px] text-muted-foreground">Active in feeds</div>
+          </div>
+
+          <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-1">
+            <div className="text-xs font-semibold text-muted-foreground">Drafts in Queue</div>
+            <div className="text-2xl font-extrabold text-amber-600 dark:text-amber-400">{noticeAnalytics.metrics.drafts}</div>
+            <div className="text-[11px] text-muted-foreground">Awaiting publication</div>
+          </div>
+
+          <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-1">
+            <div className="text-xs font-semibold text-muted-foreground">Audience Reach</div>
+            <div className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">{noticeAnalytics.metrics.totalReach}</div>
+            <div className="text-[11px] text-muted-foreground">Targeted recipients</div>
+          </div>
+
+          <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-1">
+            <div className="text-xs font-semibold text-muted-foreground">Campus Read Rate</div>
+            <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">{noticeAnalytics.metrics.averageReadRate}%</div>
+            <div className="text-[11px] text-muted-foreground">{noticeAnalytics.metrics.totalReads} confirmed reads</div>
           </div>
         </div>
       </div>

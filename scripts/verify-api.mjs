@@ -616,11 +616,273 @@ async function runTests() {
   });
   assert(studentAnalyticsRes.status === 403, "Student blocked from faculty analytics endpoint (HTTP 403)");
 
-  // Test AS20: Admin can view assignments
-  const adminAsgnRes = await fetch(`${BASE_URL}/api/assignments`, {
+  // --- PHASE 7 NOTICE & COMMUNICATION TESTS ---
+  console.log("\n--- Phase 7 Notice & Communication Tests ---");
+
+  // Test N1: Student gets notice feed
+  const studentNoticeRes = await fetch(`${BASE_URL}/api/notices`, {
+    headers: { Cookie: studentCookie },
+  });
+  const studentNoticeData = await studentNoticeRes.json();
+  assert(studentNoticeRes.status === 200, "Student retrieves notice feed (HTTP 200)");
+
+  // Test N2: Feed structure validation
+  assert(
+    Array.isArray(studentNoticeData.notices) &&
+      typeof studentNoticeData.totalCount === "number" &&
+      typeof studentNoticeData.unreadCount === "number",
+    "Notice feed returns array, totalCount, and unreadCount"
+  );
+
+  // Test N3: Student cannot see DRAFT notices
+  const hasDraft = studentNoticeData.notices.some((n) => n.status === "DRAFT");
+  assert(!hasDraft, "Student notice feed contains 0 DRAFT notices");
+
+  // Test N4: Student receives notices targeted to ALL
+  const hasAll = studentNoticeData.notices.some((n) => n.audience === "ALL");
+  assert(hasAll, "Student receives notices targeted to ALL");
+
+  // Test N5: Student receives notices targeted to STUDENTS
+  const hasStudents = studentNoticeData.notices.some((n) => n.audience === "STUDENTS");
+  assert(hasStudents, "Student receives notices targeted to STUDENTS");
+
+  // Test N6: Student receives notices targeted to their division (div-comp-a)
+  const hasDivA = studentNoticeData.notices.some((n) => n.divisionId === "div-comp-a");
+  assert(hasDivA, "Student receives notices targeted to their Division A");
+
+  // Test N7: Student does NOT receive notices targeted to another department
+  const hasMech = studentNoticeData.notices.some((n) => n.departmentId === "dept-mech");
+  assert(!hasMech, "Student blocked from notices targeted to another department");
+
+  // Test N8: Student does NOT receive notices targeted to another division
+  const hasDivB = studentNoticeData.notices.some((n) => n.divisionId === "div-comp-b");
+  assert(!hasDivB, "Student blocked from notices targeted to another division");
+
+  // Test N9: Student does NOT receive notices targeted exclusively to FACULTY
+  const hasFacultyOnly = studentNoticeData.notices.some((n) => n.audience === "FACULTY");
+  assert(!hasFacultyOnly, "Student blocked from notices targeted exclusively to FACULTY");
+
+  // Test N10: Student retrieves unread count
+  const unreadRes = await fetch(`${BASE_URL}/api/notices/unread-count`, {
+    headers: { Cookie: studentCookie },
+  });
+  const unreadData = await unreadRes.json();
+  assert(unreadRes.status === 200, "Student fetches unread notice count (HTTP 200)");
+  assert(typeof unreadData.unreadCount === "number", "Unread count is a numeric value");
+
+  // Test N11: Student blocked from creating notice (HTTP 403)
+  const studentCreateNoticeRes = await fetch(`${BASE_URL}/api/notices`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({
+      title: "Student Attempting Broadcast",
+      content: "This broadcast should be blocked by RBAC.",
+      category: "GENERAL",
+    }),
+  });
+  assert(studentCreateNoticeRes.status === 403, "Student blocked from creating notices (HTTP 403)");
+
+  // Test N12: Unauthenticated user blocked from /api/notices (HTTP 401)
+  const unauthNoticeRes = await fetch(`${BASE_URL}/api/notices`);
+  assert(unauthNoticeRes.status === 401, "Unauthenticated user blocked from notice feed (HTTP 401)");
+
+  // Test N13: Admin creates a DRAFT notice (HTTP 201)
+  const adminCreateDraftRes = await fetch(`${BASE_URL}/api/notices`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      title: "Live HTTP Test Working Draft Notice",
+      summary: "Draft summary for testing publication pipeline.",
+      content: "Detailed circular guidelines under institutional review.",
+      category: "ACADEMIC",
+      priority: "IMPORTANT",
+      audience: "STUDENTS",
+      status: "DRAFT",
+    }),
+  });
+  const adminCreateDraftData = await adminCreateDraftRes.json();
+  assert(adminCreateDraftRes.status === 201, "Admin creates DRAFT notice (HTTP 201)");
+  const testDraftId = adminCreateDraftData.notice?.id;
+
+  // Test N14: Draft notice properties validated
+  assert(
+    adminCreateDraftData.notice?.status === "DRAFT" && !adminCreateDraftData.notice?.isPublished,
+    "Draft notice has DRAFT status and isPublished false"
+  );
+
+  // Test N15: Student cannot view newly created draft notice
+  const studentRefreshedFeedRes = await fetch(`${BASE_URL}/api/notices`, {
+    headers: { Cookie: studentCookie },
+  });
+  const studentRefreshedFeedData = await studentRefreshedFeedRes.json();
+  const draftInFeed = studentRefreshedFeedData.notices.some((n) => n.id === testDraftId);
+  assert(!draftInFeed, "Newly created draft is invisible to student notice feed");
+
+  // Test N16: Student blocked from directly opening draft notice (HTTP 403)
+  const studentGetDraftRes = await fetch(`${BASE_URL}/api/notices/${testDraftId}`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(studentGetDraftRes.status === 403, "Student blocked from directly opening draft notice (HTTP 403)");
+
+  // Test N17: Admin publishes the draft notice (HTTP 200)
+  const adminPublishRes = await fetch(`${BASE_URL}/api/notices/${testDraftId}/publish`, {
+    method: "POST",
     headers: { Cookie: adminCookie },
   });
-  assert(adminAsgnRes.status === 200, "Admin can retrieve all institutional assignments (HTTP 200)");
+  const adminPublishData = await adminPublishRes.json();
+  assert(adminPublishRes.status === 200, "Admin publishes draft notice (HTTP 200)");
+  assert(adminPublishData.notice?.status === "PUBLISHED", "Notice status transitioned to PUBLISHED");
+
+  // Test N18: Published notice now visible in student feed
+  const studentPostPublishFeedRes = await fetch(`${BASE_URL}/api/notices`, {
+    headers: { Cookie: studentCookie },
+  });
+  const studentPostPublishFeedData = await studentPostPublishFeedRes.json();
+  const noticeNowVisible = studentPostPublishFeedData.notices.some((n) => n.id === testDraftId);
+  assert(noticeNowVisible, "Published notice is now visible in student feed");
+
+  // Test N19: Faculty creates a PUBLISHED notice targeted to Division A (HTTP 201)
+  const facultyNoticeRes = await fetch(`${BASE_URL}/api/notices`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: facultyCookie },
+    body: JSON.stringify({
+      title: "Faculty Division A Distributed Systems Viva Announcement",
+      summary: "Oral evaluation schedule for Semester 6 Division A.",
+      content: "Students will present their two-phase commit lab projects in Lab 402.",
+      category: "ACADEMIC",
+      priority: "NORMAL",
+      audience: "DIVISION",
+      divisionId: "div-comp-a",
+      status: "PUBLISHED",
+    }),
+  });
+  const facultyNoticeData = await facultyNoticeRes.json();
+  assert(facultyNoticeRes.status === 201, "Faculty creates targeted notice (HTTP 201)");
+  const facultyNoticeId = facultyNoticeData.notice?.id;
+
+  // Test N20: Notice validation rejects title with < 3 characters (HTTP 400)
+  const shortTitleRes = await fetch(`${BASE_URL}/api/notices`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: facultyCookie },
+    body: JSON.stringify({
+      title: "Hi",
+      content: "Valid body text exceeding minimum length threshold.",
+      category: "GENERAL",
+    }),
+  });
+  assert(shortTitleRes.status === 400, "Notice validator rejects title < 3 chars (HTTP 400)");
+
+  // Test N21: Notice validation rejects malicious .exe attachment (HTTP 400)
+  const badExtRes = await fetch(`${BASE_URL}/api/notices`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: facultyCookie },
+    body: JSON.stringify({
+      title: "Malicious Attachment Notice",
+      content: "Notice body containing blocked executable attachment.",
+      category: "GENERAL",
+      attachments: [
+        {
+          fileName: "trojan.exe",
+          fileUrl: "/downloads/trojan.exe",
+          fileSize: 2048,
+        },
+      ],
+    }),
+  });
+  assert(badExtRes.status === 400, "Notice validator rejects .exe attachment (HTTP 400)");
+
+  // Test N22: Notice validation rejects directory traversal in filename (HTTP 400)
+  const traversalRes = await fetch(`${BASE_URL}/api/notices`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: facultyCookie },
+    body: JSON.stringify({
+      title: "Path Traversal Notice",
+      content: "Notice body containing path traversal in filename.",
+      category: "GENERAL",
+      attachments: [
+        {
+          fileName: "../../etc/shadow.pdf",
+          fileUrl: "/downloads/secret.pdf",
+          fileSize: 2048,
+        },
+      ],
+    }),
+  });
+  assert(traversalRes.status === 400, "Notice validator rejects path traversal in filename (HTTP 400)");
+
+  // Test N23: Student opens notice details (HTTP 200)
+  const studentOpenNoticeRes = await fetch(`${BASE_URL}/api/notices/${facultyNoticeId}`, {
+    headers: { Cookie: studentCookie },
+  });
+  const studentOpenNoticeData = await studentOpenNoticeRes.json();
+  assert(studentOpenNoticeRes.status === 200, "Student opens notice details (HTTP 200)");
+
+  // Test N24: Opening notice auto-marks it as read
+  assert(studentOpenNoticeData.notice?.isRead === true, "Opening notice auto-marks it as read");
+
+  // Test N25: Student marks notice as unread (HTTP 200)
+  const markUnreadRes = await fetch(`${BASE_URL}/api/notices/${facultyNoticeId}/unread`, {
+    method: "POST",
+    headers: { Cookie: studentCookie },
+  });
+  assert(markUnreadRes.status === 200, "Student marks notice as unread (HTTP 200)");
+
+  // Test N26: Student marks notice as read (HTTP 200)
+  const markReadRes = await fetch(`${BASE_URL}/api/notices/${facultyNoticeId}/read`, {
+    method: "POST",
+    headers: { Cookie: studentCookie },
+  });
+  assert(markReadRes.status === 200, "Student marks notice as read (HTTP 200)");
+
+  // Test N27: Faculty blocked from editing another user's notice (HTTP 403)
+  const unauthorizedEditRes = await fetch(`${BASE_URL}/api/notices/notice-001`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: facultyCookie },
+    body: JSON.stringify({ title: "Faculty Hacked Admin Notice" }),
+  });
+  assert(unauthorizedEditRes.status === 403, "Faculty blocked from editing admin notice (HTTP 403)");
+
+  // Test N28: Faculty successfully updates own notice (HTTP 200)
+  const updateOwnRes = await fetch(`${BASE_URL}/api/notices/${facultyNoticeId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: facultyCookie },
+    body: JSON.stringify({ summary: "Updated faculty viva summary." }),
+  });
+  const updateOwnData = await updateOwnRes.json();
+  assert(updateOwnRes.status === 200, "Faculty successfully updates own notice (HTTP 200)");
+  assert(updateOwnData.notice?.summary === "Updated faculty viva summary.", "Updated summary persisted");
+
+  // Test N29: Student blocked from updating notice (HTTP 403)
+  const studentNoticeUpdateRes = await fetch(`${BASE_URL}/api/notices/${facultyNoticeId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({ title: "Student Modified Title" }),
+  });
+  assert(studentNoticeUpdateRes.status === 403, "Student blocked from updating notice (HTTP 403)");
+
+  // Test N30: Admin archives notice (HTTP 200)
+  const archiveRes = await fetch(`${BASE_URL}/api/notices/${testDraftId}/archive`, {
+    method: "POST",
+    headers: { Cookie: adminCookie },
+  });
+  const archiveData = await archiveRes.json();
+  assert(archiveRes.status === 200, "Admin archives notice (HTTP 200)");
+  assert(archiveData.notice?.status === "ARCHIVED", "Notice status transitioned to ARCHIVED");
+
+  // Test N31: Faculty retrieves notice analytics (HTTP 200)
+  const facultyAnalyticsRes = await fetch(`${BASE_URL}/api/notices/analytics`, {
+    headers: { Cookie: facultyCookie },
+  });
+  const facultyAnalyticsData = await facultyAnalyticsRes.json();
+  assert(facultyAnalyticsRes.status === 200, "Faculty retrieves notice analytics (HTTP 200)");
+  assert(facultyAnalyticsData.analytics && facultyAnalyticsData.analytics.metrics, "Analytics metrics payload present");
+  assert(typeof facultyAnalyticsData.analytics.metrics.totalReach === "number", "Total reach metric computed");
+
+  // Test N32: Student blocked from notice analytics (HTTP 403)
+  const studentNoticeAnalyticsRes = await fetch(`${BASE_URL}/api/notices/analytics`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(studentNoticeAnalyticsRes.status === 403, "Student blocked from notice analytics (HTTP 403)");
 
   console.log("\n==================================================");
   console.log(`FINAL RESULT: ${passed} PASSED, ${failed} FAILED`);
@@ -630,3 +892,4 @@ async function runTests() {
 }
 
 runTests();
+

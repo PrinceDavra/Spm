@@ -72,6 +72,13 @@ enum SubmissionStatus {
   EVALUATED
 }
 
+enum NoticeStatus {
+  DRAFT
+  PUBLISHED
+  EXPIRED
+  ARCHIVED
+}
+
 enum NoticePriority {
   NORMAL
   IMPORTANT
@@ -81,10 +88,14 @@ enum NoticePriority {
 enum NoticeCategory {
   ACADEMIC
   EXAMINATION
-  ADMINISTRATIVE
-  EVENT
+  ATTENDANCE
   PLACEMENT
+  EVENT
+  CLUB
+  HOLIDAY
   GENERAL
+  URGENT
+  ADMINISTRATIVE
 }
 
 enum NoticeAudience {
@@ -92,6 +103,11 @@ enum NoticeAudience {
   STUDENTS
   FACULTY
   STAFF
+  ADMIN
+  CLASS
+  DIVISION
+  DEPARTMENT
+  SEMESTER
 }
 
 enum NotificationType {
@@ -217,6 +233,7 @@ model User {
   reportedItems    LostFoundItem[]
   lostFoundClaims  LostFoundClaim[]
   gradesGiven      AssignmentGrade[] @relation("GradesGiven")
+  noticesRead      NoticeRead[]
 
   @@index([email])
   @@index([role])
@@ -238,6 +255,7 @@ model Department {
   faculty     Faculty[]
   subjects    Subject[]
   students    Student[]
+  notices     Notice[]
 }
 
 model Class {
@@ -251,6 +269,7 @@ model Class {
 
   department   Department  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
   divisions    Division[]
+  notices      Notice[]
 
   @@unique([departmentId, semester, academicYear])
 }
@@ -267,6 +286,7 @@ model Division {
   facultySubjects FacultySubject[]
   timetables      Timetable[]
   attendances     Attendance[]
+  notices         Notice[]
 
   @@unique([classId, name])
 }
@@ -557,11 +577,16 @@ model Notice {
   id            String         @id @default(uuid())
   authorId      String
   title         String
+  summary       String?
   content       String
   category      NoticeCategory @default(ACADEMIC)
   priority      NoticePriority @default(NORMAL)
   audience      NoticeAudience @default(ALL)
+  status        NoticeStatus   @default(PUBLISHED)
   departmentId  String?
+  classId       String?
+  divisionId    String?
+  semester      Int?
   publishDate   DateTime       @default(now())
   expiryDate    DateTime?
   attachmentUrl String?
@@ -570,8 +595,44 @@ model Notice {
   updatedAt     DateTime       @updatedAt
 
   author        User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  department    Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  class         Class?         @relation(fields: [classId], references: [id], onDelete: SetNull)
+  division      Division?      @relation(fields: [divisionId], references: [id], onDelete: SetNull)
+  attachments   NoticeAttachment[]
+  reads         NoticeRead[]
 
   @@index([priority, publishDate])
+  @@index([status, publishDate])
+  @@index([category])
+  @@index([audience])
+}
+
+model NoticeAttachment {
+  id         String   @id @default(uuid())
+  noticeId   String
+  fileName   String
+  fileUrl    String
+  fileType   String
+  fileSize   Int
+  uploadedAt DateTime @default(now())
+
+  notice     Notice   @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+
+  @@index([noticeId])
+}
+
+model NoticeRead {
+  id        String   @id @default(uuid())
+  noticeId  String
+  userId    String
+  readAt    DateTime @default(now())
+
+  notice    Notice   @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([noticeId, userId])
+  @@index([userId])
+  @@index([noticeId])
 }
 
 model Notification {
