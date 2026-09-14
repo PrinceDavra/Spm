@@ -5,6 +5,7 @@ import { TimetableService } from "@/services/timetable.service";
 import { AssignmentService } from "@/services/assignment.service";
 import { NoticeService } from "@/services/notice.service";
 import { EventService } from "@/services/event.service";
+import { ClubService } from "@/services/club.service";
 import {
   TrendingUp,
   CalendarDays,
@@ -21,6 +22,7 @@ import {
   BellRing,
   Award,
   MapPin,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -34,6 +36,9 @@ export default async function StudentDashboardPage() {
     tab: "upcoming",
     limit: 4,
   });
+
+  // Fetch student clubs
+  const { active: userActiveClubs, pending: userPendingClubs } = await ClubService.getUserClubs(user.id);
 
   // Fetch real database-backed attendance summary & history
   const summary = await AttendanceService.getStudentSummary(user.id);
@@ -509,6 +514,74 @@ export default async function StudentDashboardPage() {
             </Link>
           ))}
         </div>
+      </div>
+
+      {/* My Campus Clubs & Student Organizations Section */}
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary" />
+            <div>
+              <h2 className="text-base font-bold text-foreground">
+                My Campus Clubs ({userActiveClubs.length} Active, {userPendingClubs.length} Pending)
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Technical societies, fine arts collectives, and student innovation teams
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/dashboard/student/clubs/my-clubs"
+              className="text-xs font-bold text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-lg border border-border transition"
+            >
+              My Memberships
+            </Link>
+            <Link
+              href="/dashboard/student/clubs"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition shadow-sm self-start sm:self-auto"
+            >
+              Explore All Clubs
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </div>
+
+        {userActiveClubs.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {userActiveClubs.slice(0, 3).map((club: any) => (
+              <Link
+                key={club.id}
+                href={`/dashboard/student/clubs/${club.id}`}
+                className="p-4 rounded-xl border border-border bg-muted/30 hover:bg-muted/60 transition-colors flex items-center justify-between gap-3 group"
+              >
+                <div className="flex items-center gap-3">
+                  <img
+                    src={club.logoUrl}
+                    alt={club.name}
+                    className="w-10 h-10 rounded-xl object-cover border border-border shrink-0"
+                  />
+                  <div>
+                    <h4 className="text-xs font-bold text-foreground group-hover:text-primary transition-colors line-clamp-1">
+                      {club.name}
+                    </h4>
+                    <div className="text-[11px] text-muted-foreground mt-0.5">
+                      {club.role} &bull; {club.memberCount} members
+                    </div>
+                  </div>
+                </div>
+                <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform shrink-0" />
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="py-6 text-center text-xs text-muted-foreground">
+            You have not joined any campus clubs yet.{" "}
+            <Link href="/dashboard/student/clubs" className="text-primary font-bold hover:underline">
+              Discover active student organizations
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* Subject-Wise Attendance Overview & Quick Link */}

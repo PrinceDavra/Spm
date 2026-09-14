@@ -156,6 +156,14 @@ enum RegistrationStatus {
   ATTENDED
 }
 
+enum ClubStatus {
+  DRAFT
+  PUBLISHED
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
 enum ClubCategory {
   TECHNICAL
   CULTURAL
@@ -163,18 +171,36 @@ enum ClubCategory {
   SPORTS
   SOCIAL
   ENTREPRENEURSHIP
+  DESIGN
+  ROBOTICS
+  CODING
+  OTHER
 }
 
 enum MembershipRole {
   MEMBER
+  COORDINATOR
+  FACULTY_ADVISOR
   CORE_MEMBER
   LEAD
 }
 
 enum MembershipStatus {
   PENDING
+  ACTIVE
   APPROVED
   REJECTED
+  LEFT
+}
+
+enum ClubActivityType {
+  MEETING
+  WORKSHOP
+  PRACTICE
+  TRAINING
+  COMPETITION_PREP
+  COMMUNITY_SERVICE
+  OTHER
 }
 
 enum JobType {
@@ -256,6 +282,10 @@ model User {
   noticesRead      NoticeRead[]
   organizedEvents  Event[]           @relation("OrganizedEvents")
   eventRegistrations EventRegistration[]
+  advisedClubs     Club[]            @relation("FacultyAdvisorClubs")
+  coordinatedClubs Club[]            @relation("CoordinatorClubs")
+  clubMemberships  ClubMembership[]
+  createdActivities ClubActivity[]   @relation("CreatedActivities")
 
   @@index([email])
   @@index([role])
@@ -278,6 +308,7 @@ model Department {
   subjects    Subject[]
   students    Student[]
   notices     Notice[]
+  clubs       Club[]
 }
 
 model Class {
@@ -731,35 +762,76 @@ model EventRegistration {
 }
 
 model Club {
-  id              String           @id @default(uuid())
-  name            String           @unique
-  category        ClubCategory     @default(TECHNICAL)
-  description     String
-  logoUrl         String?
-  mentorId        String?
-  establishedYear Int              @default(2020)
-  isRecruiting    Boolean          @default(true)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  id               String           @id @default(uuid())
+  name             String           @unique
+  slug             String           @unique
+  category         ClubCategory     @default(TECHNICAL)
+  status           ClubStatus       @default(ACTIVE)
+  description      String
+  shortDescription String?
+  logoUrl          String?
+  bannerUrl        String?
+  contactEmail     String?
+  contactPhone     String?
+  departmentId     String?
+  facultyAdvisorId String?
+  coordinatorId    String?
+  mentorId         String?
+  establishedYear  Int              @default(2020)
+  isRecruiting     Boolean          @default(true)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
-  mentor          Faculty?         @relation(fields: [mentorId], references: [id], onDelete: SetNull)
-  memberships     ClubMembership[]
-  events          ClubEvent[]
+  department       Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  facultyAdvisor   User?            @relation("FacultyAdvisorClubs", fields: [facultyAdvisorId], references: [id], onDelete: SetNull)
+  coordinator      User?            @relation("CoordinatorClubs", fields: [coordinatorId], references: [id], onDelete: SetNull)
+  mentor           Faculty?         @relation(fields: [mentorId], references: [id], onDelete: SetNull)
+  memberships      ClubMembership[]
+  events           ClubEvent[]
+  activities       ClubActivity[]
+
+  @@index([status])
+  @@index([category])
 }
 
 model ClubMembership {
-  id        String           @id @default(uuid())
-  clubId    String
-  studentId String
-  role      MembershipRole   @default(MEMBER)
-  status    MembershipStatus @default(PENDING)
-  appliedAt DateTime         @default(now())
-  joinedAt  DateTime?
+  id         String           @id @default(uuid())
+  clubId     String
+  userId     String
+  studentId  String?
+  role       MembershipRole   @default(MEMBER)
+  status     MembershipStatus @default(PENDING)
+  appliedAt  DateTime         @default(now())
+  joinedAt   DateTime?
+  approvedAt DateTime?
+  approvedBy String?
+  leftAt     DateTime?
 
-  club      Club             @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  club       Club             @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  student    Student?         @relation(fields: [studentId], references: [id], onDelete: SetNull)
 
-  @@unique([clubId, studentId])
+  @@unique([clubId, userId])
+  @@index([userId])
+  @@index([clubId, status])
+}
+
+model ClubActivity {
+  id           String           @id @default(uuid())
+  clubId       String
+  title        String
+  description  String
+  activityDate DateTime
+  activityType ClubActivityType @default(MEETING)
+  venue        String?
+  createdBy    String
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  club         Club             @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  creator      User             @relation("CreatedActivities", fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@index([clubId, activityDate])
 }
 
 model ClubEvent {

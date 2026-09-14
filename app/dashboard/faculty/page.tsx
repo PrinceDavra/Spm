@@ -5,6 +5,7 @@ import { TimetableService } from "@/services/timetable.service";
 import { AssignmentService } from "@/services/assignment.service";
 import { NoticeService } from "@/services/notice.service";
 import { EventService } from "@/services/event.service";
+import { ClubService } from "@/services/club.service";
 import {
   Users,
   ClipboardCheck,
@@ -47,8 +48,18 @@ export default async function FacultyDashboardPage() {
   });
   const unreadNoticeCount = await NoticeService.getUnreadCount(user.id, Role.FACULTY, "dept-comp");
 
-  // Load faculty events & engagement summary
+  // Load faculty events summary
   const eventSummary = await EventService.getOrganizerSummary(user.id, user.role);
+
+  // Load faculty advised clubs
+  const { clubs: facultyClubs } = await ClubService.getClubs({
+    userId: user.id,
+    role: user.role,
+    limit: 20,
+  });
+  const advisedClubs = facultyClubs.filter(
+    (c) => c.facultyAdvisorId === user.id || (user.lastName && c.facultyAdvisorName?.includes(user.lastName))
+  );
 
   let primaryAnalytics = null;
   if (assignedSubjects.length > 0) {
@@ -440,6 +451,70 @@ export default async function FacultyDashboardPage() {
             <div className="text-[11px] text-muted-foreground">Verified at venue entrance</div>
           </div>
         </div>
+      </div>
+
+      {/* Clubs & Student Mentorship Section */}
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary" />
+            <div>
+              <h2 className="text-base font-bold text-foreground">
+                Clubs &amp; Student Mentorship ({advisedClubs.length} Advised Organizations)
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Faculty advisory oversight, extracurricular governance, and student project sponsorship
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/student/clubs"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition shadow-sm self-start sm:self-auto"
+          >
+            Browse All Campus Clubs
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        {advisedClubs.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {advisedClubs.map((c) => (
+              <div
+                key={c.id}
+                className="p-4 rounded-xl border border-border bg-muted/20 flex flex-col justify-between space-y-3"
+              >
+                <div className="flex items-start gap-3">
+                  <img
+                    src={c.logoUrl}
+                    alt={c.name}
+                    className="w-10 h-10 rounded-xl object-cover border border-border shrink-0"
+                  />
+                  <div>
+                    <h4 className="text-xs font-bold text-foreground line-clamp-1">{c.name}</h4>
+                    <div className="text-[11px] text-muted-foreground mt-0.5">
+                      Coordinator: {c.coordinatorName || "Student Council"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-2 border-t border-border">
+                  <span>{c.memberCount} members</span>
+                  <Link
+                    href={`/dashboard/student/clubs/${c.id}`}
+                    className="font-bold text-primary hover:underline inline-flex items-center gap-1"
+                  >
+                    <span>View Club</span>
+                    <ArrowRight className="h-3 w-3" />
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="py-6 text-center text-xs text-muted-foreground">
+            No student organizations currently assigned for faculty advisory oversight.
+          </div>
+        )}
       </div>
 
       {/* Assigned Subjects List */}

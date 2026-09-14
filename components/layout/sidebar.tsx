@@ -43,7 +43,8 @@ const roleNavItems: Record<Role, NavItem[]> = {
     { name: "Assignments", href: "/dashboard/student/assignments", icon: CheckCircle2 },
     { name: "Notices & Circulars", href: "/dashboard/student/notices", icon: Megaphone },
     { name: "Campus Events", href: "/dashboard/student/events", icon: Award },
-    { name: "Student Clubs", href: "/dashboard/student/clubs", icon: Users },
+    { name: "Campus Clubs", href: "/dashboard/student/clubs", icon: Users },
+    { name: "My Clubs", href: "/dashboard/student/clubs/my-clubs", icon: ShieldCheck },
     { name: "Placement Hub", href: "/dashboard/student/placement", icon: Briefcase },
     { name: "Lost & Found", href: "/dashboard/student/lost-found", icon: Search },
     { name: "My Profile", href: "/dashboard/student/profile", icon: User },
@@ -57,6 +58,7 @@ const roleNavItems: Record<Role, NavItem[]> = {
     { name: "My Classes & Rosters", href: "/dashboard/faculty/classes", icon: Users },
     { name: "Post Notice", href: "/dashboard/faculty/notices", icon: Megaphone },
     { name: "Campus Events", href: "/dashboard/faculty/events", icon: Award },
+    { name: "Campus Clubs", href: "/dashboard/student/clubs", icon: Users },
     { name: "Faculty Profile", href: "/dashboard/faculty/profile", icon: User },
   ],
   ADMIN: [
@@ -87,11 +89,11 @@ const roleNavItems: Record<Role, NavItem[]> = {
     { name: "Placement Reports", href: "/dashboard/placement/reports", icon: FileSpreadsheet },
   ],
   CLUB_COORDINATOR: [
-    { name: "Club Overview", href: "/dashboard/club", icon: LayoutDashboard },
-    { name: "Club Profile & Leads", href: "/dashboard/club/my-club", icon: Users },
+    { name: "Station Overview", href: "/dashboard/club", icon: LayoutDashboard },
     { name: "Membership Roster", href: "/dashboard/club/members", icon: CheckCircle2 },
+    { name: "Club Activities", href: "/dashboard/club/activities", icon: CalendarDays },
     { name: "Club Events", href: "/dashboard/club/events", icon: Award },
-    { name: "Announcements", href: "/dashboard/club/announcements", icon: Megaphone },
+    { name: "Discover Clubs", href: "/dashboard/student/clubs", icon: Users },
   ],
 };
 

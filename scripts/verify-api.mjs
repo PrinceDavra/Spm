@@ -3,7 +3,7 @@ const BASE_URL = "http://localhost:3000";
 
 async function runTests() {
   console.log("==================================================");
-  console.log("STARTING LIVE HTTP API VERIFICATION FOR PHASE 2 & 3");
+  console.log("STARTING LIVE HTTP API VERIFICATION FOR PHASES 2 THROUGH 9");
   console.log("==================================================");
 
   let passed = 0;
@@ -1163,6 +1163,324 @@ async function runTests() {
     headers: { Cookie: adminCookie },
   });
   assert(adminEventAnalyticsRes.status === 200, "Admin has universal access to event analytics (HTTP 200)");
+
+  // --- PHASE 9 CLUB MANAGEMENT TESTS ---
+  console.log("\n--- Phase 9 Club Management Tests ---");
+
+  // Club Coordinator login
+  const c_coordinatorLoginRes = await fetch(`${BASE_URL}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "club@campussphere.edu", password: "ClubPassword@123" }),
+  });
+  const c_coordinatorCookie = c_coordinatorLoginRes.headers.get("set-cookie") || "";
+  assert(c_coordinatorLoginRes.status === 200, "C1: Club Coordinator login returns HTTP 200");
+
+  // Test C2: Student can discover clubs (HTTP 200)
+  const c_clubsDiscoverRes = await fetch(`${BASE_URL}/api/clubs`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(c_clubsDiscoverRes.status === 200, "C2: Student can discover clubs (HTTP 200)");
+  const c_clubsDiscoverData = await c_clubsDiscoverRes.json();
+
+  // Test C3: Draft clubs excluded from student discovery
+  assert(Array.isArray(c_clubsDiscoverData.clubs) && c_clubsDiscoverData.clubs.length >= 10, "C3: Discovery returns list of clubs (>= 10 active/published)");
+  const c_hasClubDraft = c_clubsDiscoverData.clubs.some((c) => c.status === "DRAFT");
+  assert(!c_hasClubDraft, "C3b: Draft clubs are strictly invisible to students in discovery");
+
+  // Test C4: Category filtering works
+  const c_techClubsRes = await fetch(`${BASE_URL}/api/clubs?category=TECHNICAL`, {
+    headers: { Cookie: studentCookie },
+  });
+  const c_techClubsData = await c_techClubsRes.json();
+  const c_allTech = c_techClubsData.clubs?.length > 0 && c_techClubsData.clubs.every((c) => c.category === "TECHNICAL");
+  assert(c_allTech, "C4: Filtering by category TECHNICAL returns only technical clubs");
+
+  // Test C5: Search filtering works
+  const c_searchRes = await fetch(`${BASE_URL}/api/clubs?search=Robotics`, {
+    headers: { Cookie: studentCookie },
+  });
+  const c_searchData = await c_searchRes.json();
+  const c_matchesSearch = c_searchData.clubs?.length > 0 && c_searchData.clubs.some((c) => c.name.toLowerCase().includes("robotics") || c.description.toLowerCase().includes("robotics"));
+  assert(c_matchesSearch, "C5: Search filtering for 'Robotics' yields matching clubs");
+
+  // Test C6: Sorting by members works
+  const c_sortRes = await fetch(`${BASE_URL}/api/clubs?sort=members`, {
+    headers: { Cookie: studentCookie },
+  });
+  const c_sortData = await c_sortRes.json();
+  let c_sortedCorrectly = true;
+  for (let i = 0; i < (c_sortData.clubs?.length || 0) - 1; i++) {
+    if (c_sortData.clubs[i].memberCount < c_sortData.clubs[i + 1].memberCount) {
+      c_sortedCorrectly = false;
+      break;
+    }
+  }
+  assert(c_sortedCorrectly, "C6: Sorting by 'members' orders clubs descending by memberCount");
+
+  // Test C7: Fetch club detail (HTTP 200)
+  const c_clubDetailRes = await fetch(`${BASE_URL}/api/clubs/club-001`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(c_clubDetailRes.status === 200, "C7: Student fetches club detail for club-001 (HTTP 200)");
+  const c_clubDetailData = await c_clubDetailRes.json();
+
+  // Test C8: Linked Phase 8 events integrated
+  assert(Array.isArray(c_clubDetailData.club?.events), "C8: Club detail integrates linked Phase 8 events array");
+
+  // Test C9: Activities array returned
+  assert(Array.isArray(c_clubDetailData.club?.activities), "C9: Club detail includes activities list");
+
+  // Test C10: Admin creates a DRAFT club (HTTP 201)
+  const c_createClubRes = await fetch(`${BASE_URL}/api/clubs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      name: "Autonomous Systems Club",
+      category: "ROBOTICS",
+      description: "Dedicated to building autonomous ground vehicles, drone swarms, and perception pipelines for university challenges.",
+      shortDescription: "Autonomous rovers and drone engineering guild.",
+      contactEmail: "autonomous@campussphere.edu",
+      status: "DRAFT",
+    }),
+  });
+  assert(c_createClubRes.status === 201, "C10: Admin creates a DRAFT club (HTTP 201)");
+  const c_createClubData = await c_createClubRes.json();
+  const c_testClubId = c_createClubData.club?.id;
+
+  // Test C11: Student blocked from viewing DRAFT club (HTTP 404)
+  const c_studentViewDraftRes = await fetch(`${BASE_URL}/api/clubs/${c_testClubId}`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(c_studentViewDraftRes.status === 404, "C11: Student blocked from viewing DRAFT club (HTTP 404)");
+
+  // Test C12: Student forbidden from creating a club (HTTP 403)
+  const c_studentCreateClubRes = await fetch(`${BASE_URL}/api/clubs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({
+      name: "Illicit Student Club",
+      category: "SOCIAL",
+      description: "Should be blocked by server-side RBAC",
+      contactEmail: "hack@campussphere.edu",
+    }),
+  });
+  assert(c_studentCreateClubRes.status === 403, "C12: Student forbidden from creating a club (HTTP 403)");
+
+  // Test C13: Admin publishes the draft club (HTTP 200)
+  const c_publishClubRes = await fetch(`${BASE_URL}/api/clubs/${c_testClubId}/publish`, {
+    method: "POST",
+    headers: { Cookie: adminCookie },
+  });
+  assert(c_publishClubRes.status === 200, "C13: Admin publishes the draft club (HTTP 200)");
+  const c_publishData = await c_publishClubRes.json();
+  assert(c_publishData.club?.status === "ACTIVE", "C13b: Published club status transitions to ACTIVE");
+
+  // Test C14: Student can now view the published club (HTTP 200)
+  const c_studentViewPublishedRes = await fetch(`${BASE_URL}/api/clubs/${c_testClubId}`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(c_studentViewPublishedRes.status === 200, "C14: Student can now view published club (HTTP 200)");
+
+  // Test C15: Admin updates club details (HTTP 200)
+  const c_updateClubRes = await fetch(`${BASE_URL}/api/clubs/${c_testClubId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      shortDescription: "Updated rover and perception lab description.",
+    }),
+  });
+  assert(c_updateClubRes.status === 200, "C15: Admin updates club details (HTTP 200)");
+  const c_updateData = await c_updateClubRes.json();
+  assert(c_updateData.club?.shortDescription === "Updated rover and perception lab description.", "C15b: Club shortDescription updated");
+
+  // Test C16: Student forbidden from modifying club (HTTP 403)
+  const c_studentUpdateClubRes = await fetch(`${BASE_URL}/api/clubs/${c_testClubId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({ name: "Defaced Club" }),
+  });
+  assert(c_studentUpdateClubRes.status === 403, "C16: Student forbidden from modifying club (HTTP 403)");
+
+  // Test C17: Student submits membership request (HTTP 201)
+  const c_joinClubRes = await fetch(`${BASE_URL}/api/clubs/${c_testClubId}/join`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({ message: "Excited to work on ROS2 perception!" }),
+  });
+  assert(c_joinClubRes.status === 201, "C17: Student submits membership request (HTTP 201)");
+  const c_joinData = await c_joinClubRes.json();
+  const c_testMembershipId = c_joinData.membership?.id;
+  assert(c_joinData.membership?.status === "PENDING", "C17b: Submitted membership has status PENDING");
+
+  // Test C18: Duplicate join request rejected (HTTP 400)
+  const c_duplicateJoinRes = await fetch(`${BASE_URL}/api/clubs/${c_testClubId}/join`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+  });
+  assert(c_duplicateJoinRes.status === 400, "C18: Duplicate join request rejected (HTTP 400)");
+
+  // Test C19: Suspended club rejects join requests (HTTP 400)
+  const c_suspendedJoinRes = await fetch(`${BASE_URL}/api/clubs/club-014/join`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+  });
+  assert(c_suspendedJoinRes.status === 400, "C19: Suspended club rejects join requests (HTTP 400)");
+
+  // Test C20: Student forbidden from viewing member roster (HTTP 403)
+  const c_studentMembersRes = await fetch(`${BASE_URL}/api/clubs/${c_testClubId}/members`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(c_studentMembersRes.status === 403, "C20: Student forbidden from viewing member roster (HTTP 403)");
+
+  // Test C21: Admin retrieves member roster (HTTP 200)
+  const c_adminMembersRes = await fetch(`${BASE_URL}/api/clubs/${c_testClubId}/members`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(c_adminMembersRes.status === 200, "C21: Admin retrieves member roster (HTTP 200)");
+  const c_adminMembersData = await c_adminMembersRes.json();
+  assert(Array.isArray(c_adminMembersData.pending) && c_adminMembersData.pending.length > 0, "C21b: Member roster includes pending requests");
+
+  // Test C22: Student forbidden from self-approving membership (HTTP 403)
+  const c_selfApproveRes = await fetch(`${BASE_URL}/api/clubs/${c_testClubId}/members/${c_testMembershipId}/approve`, {
+    method: "POST",
+    headers: { Cookie: studentCookie },
+  });
+  assert(c_selfApproveRes.status === 403, "C22: Student forbidden from self-approving membership (HTTP 403)");
+
+  // Test C23: Admin approves membership (HTTP 200)
+  const c_approveRes = await fetch(`${BASE_URL}/api/clubs/${c_testClubId}/members/${c_testMembershipId}/approve`, {
+    method: "POST",
+    headers: { Cookie: adminCookie },
+  });
+  assert(c_approveRes.status === 200, "C23: Admin approves membership (HTTP 200)");
+  const c_approveData = await c_approveRes.json();
+  assert(c_approveData.membership?.status === "ACTIVE", "C23b: Approved membership transitions to ACTIVE");
+
+  // Test C24: Student club detail now reflects active membership
+  const c_studentDetailAfterApproveRes = await fetch(`${BASE_URL}/api/clubs/${c_testClubId}`, {
+    headers: { Cookie: studentCookie },
+  });
+  const c_studentDetailAfterApproveData = await c_studentDetailAfterApproveRes.json();
+  assert(c_studentDetailAfterApproveData.club?.userMembership?.status === "ACTIVE", "C24: Student club detail reflects ACTIVE membership");
+
+  // Test C25: Student checks my-clubs (HTTP 200)
+  const c_myClubsRes = await fetch(`${BASE_URL}/api/clubs/my-clubs`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(c_myClubsRes.status === 200, "C25: Student checks my-clubs (HTTP 200)");
+  const c_myClubsData = await c_myClubsRes.json();
+  assert(c_myClubsData.activeClubs?.some((c) => c.id === c_testClubId), "C25b: Joined club is listed in student's activeClubs");
+
+  // Test C26: Student leaves the club (HTTP 200)
+  const c_leaveClubRes = await fetch(`${BASE_URL}/api/clubs/${c_testClubId}/leave`, {
+    method: "POST",
+    headers: { Cookie: studentCookie },
+  });
+  assert(c_leaveClubRes.status === 200, "C26: Student leaves the club (HTTP 200)");
+
+  // Test C27: Club removed from activeClubs
+  const c_myClubsAfterLeaveRes = await fetch(`${BASE_URL}/api/clubs/my-clubs`, {
+    headers: { Cookie: studentCookie },
+  });
+  const c_myClubsAfterLeaveData = await c_myClubsAfterLeaveRes.json();
+  assert(!c_myClubsAfterLeaveData.activeClubs?.some((c) => c.id === c_testClubId), "C27: Club removed from activeClubs after leaving");
+
+  // Test C28: Student can re-apply to club after leaving (HTTP 201)
+  const c_reApplyRes = await fetch(`${BASE_URL}/api/clubs/${c_testClubId}/join`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({ message: "Re-applying with updated portfolio" }),
+  });
+  assert(c_reApplyRes.status === 201, "C28: Student can re-apply after leaving (HTTP 201)");
+  const c_reApplyData = await c_reApplyRes.json();
+  const c_secondMembershipId = c_reApplyData.membership?.id;
+
+  // Test C29: Admin rejects membership request (HTTP 200)
+  const c_rejectRes = await fetch(`${BASE_URL}/api/clubs/${c_testClubId}/members/${c_secondMembershipId}/reject`, {
+    method: "POST",
+    headers: { Cookie: adminCookie },
+  });
+  assert(c_rejectRes.status === 200, "C29: Admin rejects membership request (HTTP 200)");
+  const c_rejectData = await c_rejectRes.json();
+  assert(c_rejectData.membership?.status === "REJECTED", "C29b: Membership status transitions to REJECTED");
+
+  // Test C30: Coordinator accesses roster of assigned club (HTTP 200)
+  const c_coordinatorRosterRes = await fetch(`${BASE_URL}/api/clubs/club-001/members`, {
+    headers: { Cookie: c_coordinatorCookie },
+  });
+  assert(c_coordinatorRosterRes.status === 200, "C30: Coordinator accesses roster of assigned club (HTTP 200)");
+
+  // Test C31: Coordinator forbidden from managing unrelated club (HTTP 403)
+  const c_coordinatorForbiddenRes = await fetch(`${BASE_URL}/api/clubs/club-006/members`, {
+    headers: { Cookie: c_coordinatorCookie },
+  });
+  assert(c_coordinatorForbiddenRes.status === 403, "C31: Coordinator forbidden from managing unrelated club roster (HTTP 403)");
+
+  // Test C32: Coordinator creates activity in assigned club (HTTP 201)
+  const c_createActivityRes = await fetch(`${BASE_URL}/api/clubs/club-001/activities`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: c_coordinatorCookie },
+    body: JSON.stringify({
+      title: "ROS2 Node Architecture Workshop",
+      description: "Hands-on session creating publishers, subscribers, and launch files.",
+      activityDate: "2026-10-15T15:00:00.000Z",
+      activityType: "WORKSHOP",
+      venue: "Robotics Lab 3",
+    }),
+  });
+  assert(c_createActivityRes.status === 201, "C32: Coordinator creates activity in assigned club (HTTP 201)");
+  const c_createActivityData = await c_createActivityRes.json();
+  const c_testActivityId = c_createActivityData.activity?.id;
+
+  // Test C33: Student forbidden from creating club activity (HTTP 403)
+  const c_studentCreateActivityRes = await fetch(`${BASE_URL}/api/clubs/club-001/activities`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({
+      title: "Unauthorized Student Activity",
+      description: "Should fail RBAC check",
+      activityDate: "2026-10-20T10:00:00.000Z",
+      activityType: "MEETING",
+    }),
+  });
+  assert(c_studentCreateActivityRes.status === 403, "C33: Student forbidden from creating club activity (HTTP 403)");
+
+  // Test C34: Fetch club activities list (HTTP 200)
+  const c_activitiesListRes = await fetch(`${BASE_URL}/api/clubs/club-001/activities`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(c_activitiesListRes.status === 200, "C34: Club activities list retrieved (HTTP 200)");
+  const c_activitiesListData = await c_activitiesListRes.json();
+  assert(c_activitiesListData.activities?.some((a) => a.id === c_testActivityId), "C34b: Newly created activity listed in activities");
+
+  // Test C35: Coordinator deletes activity (HTTP 200)
+  const c_deleteActivityRes = await fetch(`${BASE_URL}/api/clubs/club-001/activities/${c_testActivityId}`, {
+    method: "DELETE",
+    headers: { Cookie: c_coordinatorCookie },
+  });
+  assert(c_deleteActivityRes.status === 200, "C35: Coordinator deletes activity (HTTP 200)");
+
+  // Test C36: Coordinator retrieves club analytics (HTTP 200)
+  const c_coordinatorAnalyticsRes = await fetch(`${BASE_URL}/api/clubs/club-001/analytics`, {
+    headers: { Cookie: c_coordinatorCookie },
+  });
+  assert(c_coordinatorAnalyticsRes.status === 200, "C36: Coordinator retrieves club analytics (HTTP 200)");
+  const c_analyticsData = await c_coordinatorAnalyticsRes.json();
+  assert(typeof c_analyticsData.analytics?.totalMembers === "number", "C36b: Analytics contains totalMembers");
+  assert(typeof c_analyticsData.analytics?.engagementScore === "number", "C36c: Analytics contains deterministic engagementScore");
+
+  // Test C37: Student forbidden from viewing club analytics (HTTP 403)
+  const c_studentAnalyticsRes = await fetch(`${BASE_URL}/api/clubs/club-001/analytics`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(c_studentAnalyticsRes.status === 403, "C37: Student forbidden from club analytics (HTTP 403)");
+
+  // Test C38: Admin universal access to club analytics (HTTP 200)
+  const c_adminAnalyticsRes = await fetch(`${BASE_URL}/api/clubs/club-001/analytics`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(c_adminAnalyticsRes.status === 200, "C38: Admin universal access to club analytics (HTTP 200)");
 
   console.log("\n==================================================");
   console.log(`FINAL RESULT: ${passed} PASSED, ${failed} FAILED`);

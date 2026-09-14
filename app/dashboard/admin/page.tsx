@@ -2,6 +2,7 @@ import { Role } from "@prisma/client";
 import { requireRole } from "@/lib/auth/rbac";
 import { NoticeService } from "@/services/notice.service";
 import { EventService } from "@/services/event.service";
+import { ClubService } from "@/services/club.service";
 import {
   Users,
   Building2,
@@ -25,6 +26,16 @@ export default async function AdminDashboardPage() {
     role: Role.ADMIN,
     tab: "upcoming",
   });
+
+  // Load club governance metrics
+  const { clubs: allClubs } = await ClubService.getClubs({
+    userId: user.id,
+    role: user.role,
+    limit: 100,
+  });
+  const activeClubsCount = allClubs.filter((c) => c.status === "ACTIVE").length;
+  const draftClubsCount = allClubs.filter((c) => c.status === "DRAFT").length;
+  const totalClubMembers = allClubs.reduce((acc, c) => acc + (c.memberCount || 0), 0);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -231,6 +242,56 @@ export default async function AdminDashboardPage() {
             <div className="text-xs font-semibold text-muted-foreground">Overall Attendance Rate</div>
             <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">{eventSummary.averageAttendanceRate}%</div>
             <div className="text-[11px] text-muted-foreground">Verified participant turnout</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Student Organizations & Club Governance Section */}
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary" />
+            <div>
+              <h2 className="text-base font-bold text-foreground">
+                Student Organizations &amp; Club Governance
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Campus society charters, faculty advisor mappings, and extracurricular community engagement
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/admin/clubs"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition shadow-sm self-start sm:self-auto"
+          >
+            Manage Club Charters
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-1">
+            <div className="text-xs font-semibold text-muted-foreground">Active Clubs</div>
+            <div className="text-2xl font-extrabold text-foreground">{activeClubsCount}</div>
+            <div className="text-[11px] text-muted-foreground">Chartered societies</div>
+          </div>
+
+          <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-1">
+            <div className="text-xs font-semibold text-muted-foreground">Draft Review Queue</div>
+            <div className="text-2xl font-extrabold text-amber-600 dark:text-amber-400">{draftClubsCount}</div>
+            <div className="text-[11px] text-muted-foreground">Awaiting admin publication</div>
+          </div>
+
+          <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-1">
+            <div className="text-xs font-semibold text-muted-foreground">Total Memberships</div>
+            <div className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">{totalClubMembers}</div>
+            <div className="text-[11px] text-muted-foreground">Active student participants</div>
+          </div>
+
+          <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-1">
+            <div className="text-xs font-semibold text-muted-foreground">All Campus Societies</div>
+            <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">{allClubs.length}</div>
+            <div className="text-[11px] text-muted-foreground">Total registered chapters</div>
           </div>
         </div>
       </div>
