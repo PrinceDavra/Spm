@@ -4,6 +4,7 @@ import { AttendanceService } from "@/services/attendance.service";
 import { TimetableService } from "@/services/timetable.service";
 import { AssignmentService } from "@/services/assignment.service";
 import { NoticeService } from "@/services/notice.service";
+import { EventService } from "@/services/event.service";
 import {
   Users,
   ClipboardCheck,
@@ -45,6 +46,9 @@ export default async function FacultyDashboardPage() {
     limit: 4,
   });
   const unreadNoticeCount = await NoticeService.getUnreadCount(user.id, Role.FACULTY, "dept-comp");
+
+  // Load faculty events & engagement summary
+  const eventSummary = await EventService.getOrganizerSummary(user.id, user.role);
 
   let primaryAnalytics = null;
   if (assignedSubjects.length > 0) {
@@ -385,6 +389,56 @@ export default async function FacultyDashboardPage() {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Events & Campus Engagement Section */}
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+          <div className="flex items-center gap-2">
+            <Award className="h-5 w-5 text-primary" />
+            <div>
+              <h2 className="text-base font-bold text-foreground">
+                Events &amp; Campus Engagement
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Extracurricular masterclasses, technical hackathons, and participant attendance
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/faculty/events"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition shadow-sm self-start sm:self-auto"
+          >
+            Manage Events &amp; Attendance
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-1">
+            <div className="text-xs font-semibold text-muted-foreground">Active Events</div>
+            <div className="text-2xl font-extrabold text-foreground">{eventSummary.activeEventsCount}</div>
+            <div className="text-[11px] text-muted-foreground">Open for registration</div>
+          </div>
+
+          <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-1">
+            <div className="text-xs font-semibold text-muted-foreground">Total Registrations</div>
+            <div className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">{eventSummary.totalRegistrationsCount}</div>
+            <div className="text-[11px] text-muted-foreground">Student participants</div>
+          </div>
+
+          <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-1">
+            <div className="text-xs font-semibold text-muted-foreground">Available Capacity</div>
+            <div className="text-2xl font-extrabold text-amber-600 dark:text-amber-400">{eventSummary.totalSeatsAvailable}</div>
+            <div className="text-[11px] text-muted-foreground">Unallocated seats</div>
+          </div>
+
+          <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-1">
+            <div className="text-xs font-semibold text-muted-foreground">Average Attendance</div>
+            <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">{eventSummary.averageAttendanceRate}%</div>
+            <div className="text-[11px] text-muted-foreground">Verified at venue entrance</div>
+          </div>
         </div>
       </div>
 

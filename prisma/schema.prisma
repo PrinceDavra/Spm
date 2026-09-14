@@ -121,13 +121,33 @@ enum NotificationType {
   SYSTEM
 }
 
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  REGISTRATION_OPEN
+  REGISTRATION_CLOSED
+  COMPLETED
+  ARCHIVED
+}
+
 enum EventCategory {
-  TECHNICAL
-  CULTURAL
-  SPORTS
   WORKSHOP
   SEMINAR
+  HACKATHON
+  CULTURAL
+  SPORTS
+  CLUB
   PLACEMENT
+  TECHNICAL
+  COMPETITION
+  WEBINAR
+  OTHER
+}
+
+enum EventAttendanceStatus {
+  UNMARKED
+  PRESENT
+  ABSENT
 }
 
 enum RegistrationStatus {
@@ -234,6 +254,8 @@ model User {
   lostFoundClaims  LostFoundClaim[]
   gradesGiven      AssignmentGrade[] @relation("GradesGiven")
   noticesRead      NoticeRead[]
+  organizedEvents  Event[]           @relation("OrganizedEvents")
+  eventRegistrations EventRegistration[]
 
   @@index([email])
   @@index([role])
@@ -656,39 +678,56 @@ model Notification {
 
 model Event {
   id                   String              @id @default(uuid())
-  organizerId          String
+  slug                 String              @unique
   title                String
+  summary              String?
   description          String
   category             EventCategory       @default(WORKSHOP)
+  status               EventStatus         @default(PUBLISHED)
+  organizerId          String
   venue                String
   roomId               String?
+  eventDate            DateTime            @default(now())
   startDateTime        DateTime
   endDateTime          DateTime
-  capacity             Int
+  registrationOpenAt   DateTime            @default(now())
   registrationDeadline DateTime
+  capacity             Int
   posterUrl            String?
   isPublished          Boolean             @default(true)
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
 
+  organizer            User                @relation("OrganizedEvents", fields: [organizerId], references: [id], onDelete: Cascade)
   room                 Room?               @relation(fields: [roomId], references: [id], onDelete: SetNull)
   registrations        EventRegistration[]
   clubEvents           ClubEvent[]
 
   @@index([startDateTime])
+  @@index([status])
+  @@index([category])
 }
 
 model EventRegistration {
-  id           String             @id @default(uuid())
-  eventId      String
-  studentId    String
-  registeredAt DateTime           @default(now())
-  status       RegistrationStatus @default(REGISTERED)
+  id               String                @id @default(uuid())
+  eventId          String
+  userId           String
+  studentId        String?
+  confirmationCode String                @default("")
+  registeredAt     DateTime              @default(now())
+  status           RegistrationStatus    @default(REGISTERED)
+  attendanceStatus EventAttendanceStatus @default(UNMARKED)
+  attendedAt       DateTime?
+  markedBy         String?
+  cancelledAt      DateTime?
 
-  event        Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  student      Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  event            Event                 @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user             User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  student          Student?              @relation(fields: [studentId], references: [id], onDelete: SetNull)
 
-  @@unique([eventId, studentId])
+  @@unique([eventId, userId])
+  @@index([userId])
+  @@index([eventId, status])
 }
 
 model Club {

@@ -19,8 +19,8 @@
 | **Phase 5** | AI / Constraint-Based Timetable Generator (CSP Solver) | **COMPLETED** | Deterministic CSP solver (MRV + Degree + Forward Checking + Soft Optimization), conflict detector, draft/publish lifecycle, student/faculty/admin views, 19 integration tests & 66 live HTTP verification checks passing |
 | **Phase 6** | Assignments, Submissions & Faculty Grading Drawer | **COMPLETED** | Complete assignment authoring, dynamic deadline urgency indicators, server-side late penalty logic, file security validation, versioned resubmissions, grading drawer with student notification, 29 Vitest tests & 101 live HTTP checks passing |
 | **Phase 7** | Notices, Announcements & Communication System | **COMPLETED** | Complete institutional communication lifecycle: authoring, dynamic audience targeting (ALL, STUDENTS, FACULTY, DEPT, DIV, SEMESTER), live preview card, read tracking, auto-read triggers, unread badges, push alerts via NotificationService, 29 Vitest tests & 138 live HTTP checks passing |
-| **Phase 8** | Events Discovery, Capacity Management & Registration | **PENDING** | Next phase |
-| **Phase 9** | Club Management & Coordinator Roster Workflows | **PENDING** | - |
+| **Phase 8** | Events Discovery, Capacity Management & Registration | **COMPLETED** | Complete campus events platform: authoring, lifecycle state machine (Draft, Open, Closed, Completed, Archived), atomic capacity checks with race-condition prevention, confirmation pass tickets, .ics iCalendar export, cancellation seat restoration, participant attendance marking (Present/Absent), 33 Vitest tests & 185 live HTTP checks passing |
+| **Phase 9** | Club Management & Coordinator Roster Workflows | **PENDING** | Next phase |
 | **Phase 10**| Placement Drives, Prep Bank, Timed Quizzes & Application Tracker| **PENDING** | - |
 | **Phase 11**| Lost & Found Community Board & Claim Verification | **PENDING** | - |
 | **Phase 12**| Admin Management (Academic Setup, Faculty Mapping, Rooms) | **PENDING** | - |
@@ -44,7 +44,7 @@
 | **Timetable CSP Engine** | 🟢 Complete | 🟢 Complete | 🟢 Complete | 🟢 Complete | Complete |
 | **Assignment Lifecycle** | 🟢 Complete | 🟢 Complete | 🟢 Complete | 🟢 Complete | Complete |
 | **Notices & Communication** | 🟢 Complete | 🟢 Complete | 🟢 Complete | 🟢 Complete | Complete |
-| **Events & RSVPs** | ⚪ | ⚪ | ⚪ | ⚪ | Pending |
+| **Events & RSVPs** | 🟢 Complete | 🟢 Complete | 🟢 Complete | 🟢 Complete | Complete |
 | **Clubs Management** | ⚪ | ⚪ | ⚪ | ⚪ | Pending |
 | **Placement & Quizzes** | ⚪ | ⚪ | ⚪ | ⚪ | Pending |
 | **Lost & Found** | ⚪ | ⚪ | ⚪ | ⚪ | Pending |

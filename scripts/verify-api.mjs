@@ -884,6 +884,286 @@ async function runTests() {
   });
   assert(studentNoticeAnalyticsRes.status === 403, "Student blocked from notice analytics (HTTP 403)");
 
+  // =========================================================================
+  // --- PHASE 8 EVENTS DISCOVERY, CAPACITY & REGISTRATION TESTS ---
+  // =========================================================================
+  console.log("\n--- Phase 8 Events, Capacity & Registration Tests ---");
+
+  // Test E1: Unauthenticated request to /api/events returns HTTP 401
+  const unauthEventsRes = await fetch(`${BASE_URL}/api/events`);
+  assert(unauthEventsRes.status === 401, "Unauthenticated access to /api/events returns HTTP 401");
+
+  // Test E2: Student retrieves discovery feed returns HTTP 200
+  const studentEventsRes = await fetch(`${BASE_URL}/api/events`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(studentEventsRes.status === 200, "Student retrieves discovery feed (HTTP 200)");
+  const studentEventsData = await studentEventsRes.json();
+
+  // Test E3: Discovery feed includes events array and total count
+  assert(Array.isArray(studentEventsData.events), "Discovery feed returns events array");
+  assert(typeof studentEventsData.total === "number", "Discovery feed returns total count");
+
+  // Test E4: Discovery feed contains no draft events for student
+  const hasDraftsInStudentFeed = studentEventsData.events.some((e) => e.status === "DRAFT");
+  assert(!hasDraftsInStudentFeed, "Draft events are strictly hidden from student feed");
+
+  // Test E5: Discovery feed calculates seatsRemaining
+  assert(typeof studentEventsData.events[0]?.seatsRemaining === "number", "Event cards include calculated seatsRemaining");
+
+  // Test E6: Category filtering returns only matching category
+  const hackathonsRes = await fetch(`${BASE_URL}/api/events?category=HACKATHON`, {
+    headers: { Cookie: studentCookie },
+  });
+  const hackathonsData = await hackathonsRes.json();
+  assert(hackathonsRes.status === 200, "Category filtering returns HTTP 200");
+  assert(hackathonsData.events.every((e) => e.category === "HACKATHON"), "All filtered events are HACKATHON");
+
+  // Test E7: Search filtering matches query
+  const searchEventsRes = await fetch(`${BASE_URL}/api/events?search=Masterclass`, {
+    headers: { Cookie: studentCookie },
+  });
+  const searchEventsData = await searchEventsRes.json();
+  assert(searchEventsRes.status === 200, "Search filtering returns HTTP 200");
+  assert(searchEventsData.events.some((e) => e.title.includes("Masterclass")), "Search returns matching Masterclass event");
+
+  // Test E8: Tab filter upcoming returns events
+  const upcomingEventsRes = await fetch(`${BASE_URL}/api/events?tab=upcoming`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(upcomingEventsRes.status === 200, "Tab filter tab=upcoming returns HTTP 200");
+
+  // Test E9: Student blocked from creating event (HTTP 403)
+  const studentCreateEventRes = await fetch(`${BASE_URL}/api/events`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({
+      title: "Student Unauthorized Event",
+      description: "Students should not be allowed to organize events.",
+      category: "WORKSHOP",
+      venue: "Hall A",
+      startDateTime: "2026-11-01T10:00:00.000Z",
+      endDateTime: "2026-11-01T14:00:00.000Z",
+      registrationDeadline: "2026-10-31T20:00:00.000Z",
+      capacity: 30,
+    }),
+  });
+  assert(studentCreateEventRes.status === 403, "Student blocked from creating event (HTTP 403)");
+
+  // Test E10: Faculty creates new draft event (HTTP 201)
+  const facultyCreateEventRes = await fetch(`${BASE_URL}/api/events`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: facultyCookie },
+    body: JSON.stringify({
+      title: "Live API Faculty Verification Workshop",
+      summary: "Live test event creation for Phase 8.",
+      description: "Full workshop description covering live verification assertions and testing.",
+      category: "TECHNICAL",
+      venue: "Lab 402, High Performance Cluster",
+      startDateTime: "2026-11-12T10:00:00.000Z",
+      endDateTime: "2026-11-12T14:00:00.000Z",
+      registrationDeadline: "2026-11-11T20:00:00.000Z",
+      capacity: 25,
+      status: "DRAFT",
+    }),
+  });
+  assert(facultyCreateEventRes.status === 201, "Faculty creates event draft (HTTP 201)");
+  const facultyCreatedData = await facultyCreateEventRes.json();
+  const testDraftEventId = facultyCreatedData.event?.id;
+
+  // Test E11: Created draft status is DRAFT
+  assert(facultyCreatedData.event?.status === "DRAFT", "New event status is DRAFT");
+
+  // Test E12: Student cannot view draft event detail (HTTP 404)
+  const studentViewDraftRes = await fetch(`${BASE_URL}/api/events/${testDraftEventId}`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(studentViewDraftRes.status === 404, "Student cannot access draft event detail (HTTP 404)");
+
+  // Test E13: Admin creates event with capacity=1 (HTTP 201)
+  const adminCreateEventRes = await fetch(`${BASE_URL}/api/events`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      title: "Capacity Limited Single Seat Workshop",
+      summary: "Single seat capacity live testing.",
+      description: "Testing strict capacity limits and concurrency protection live over HTTP.",
+      category: "WORKSHOP",
+      venue: "Executive Suite A",
+      startDateTime: "2026-11-18T10:00:00.000Z",
+      endDateTime: "2026-11-18T13:00:00.000Z",
+      registrationDeadline: "2026-11-17T20:00:00.000Z",
+      capacity: 1,
+      status: "REGISTRATION_OPEN",
+    }),
+  });
+  assert(adminCreateEventRes.status === 201, "Admin creates capacity=1 event (HTTP 201)");
+  const adminCreatedData = await adminCreateEventRes.json();
+  const singleSeatEventId = adminCreatedData.event?.id;
+
+  // Test E14: Faculty publishes draft event (HTTP 200)
+  const publishEventRes = await fetch(`${BASE_URL}/api/events/${testDraftEventId}/publish`, {
+    method: "POST",
+    headers: { Cookie: facultyCookie },
+  });
+  assert(publishEventRes.status === 200, "Faculty publishes draft event (HTTP 200)");
+  const publishEventData = await publishEventRes.json();
+
+  // Test E15: Published event status is REGISTRATION_OPEN
+  assert(publishEventData.event?.status === "REGISTRATION_OPEN", "Published event transitioned to REGISTRATION_OPEN");
+
+  // Test E16: Student now can view published event detail (HTTP 200)
+  const studentViewPublishedRes = await fetch(`${BASE_URL}/api/events/${testDraftEventId}`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(studentViewPublishedRes.status === 200, "Student accesses published event detail (HTTP 200)");
+
+  // Test E17: Student registers for event (HTTP 201)
+  const studentRegisterRes = await fetch(`${BASE_URL}/api/events/${singleSeatEventId}/register`, {
+    method: "POST",
+    headers: { Cookie: studentCookie },
+  });
+  assert(studentRegisterRes.status === 201, "Student registers for open event (HTTP 201)");
+  const studentRegisterData = await studentRegisterRes.json();
+
+  // Test E18: Registration returns confirmation code with CS- prefix
+  assert(typeof studentRegisterData.registration?.confirmationCode === "string" && studentRegisterData.registration.confirmationCode.startsWith("CS-"), "Registration returns unique CS- confirmation code");
+
+  // Test E19: Duplicate registration by same student returns HTTP 400
+  const duplicateRegisterRes = await fetch(`${BASE_URL}/api/events/${singleSeatEventId}/register`, {
+    method: "POST",
+    headers: { Cookie: studentCookie },
+  });
+  assert(duplicateRegisterRes.status === 400, "Duplicate registration rejected (HTTP 400)");
+
+  // Test E20: Capacity enforcement - another attempt when full returns HTTP 400 capacity
+  const facultyAttemptFullRes = await fetch(`${BASE_URL}/api/events/${singleSeatEventId}/register`, {
+    method: "POST",
+    headers: { Cookie: facultyCookie },
+  });
+  assert(facultyAttemptFullRes.status === 400, "Registration rejected when capacity is full (HTTP 400)");
+  const facultyAttemptFullData = await facultyAttemptFullRes.json();
+  assert(facultyAttemptFullData.error?.includes("capacity"), "Error message indicates capacity reached");
+
+  // Test E21: Student checks registered events (HTTP 200)
+  const studentRegisteredRes = await fetch(`${BASE_URL}/api/events/registered`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(studentRegisteredRes.status === 200, "Student retrieves registered events (HTTP 200)");
+  const studentRegisteredData = await studentRegisteredRes.json();
+
+  // Test E22: Registered events list contains the registered event
+  const isRegisteredFound = studentRegisteredData.upcoming?.some((e) => e.id === singleSeatEventId);
+  assert(isRegisteredFound, "Newly registered event appears in upcoming registered list");
+
+  // Test E23: Calendar export download returns HTTP 200
+  const calendarRes = await fetch(`${BASE_URL}/api/events/${singleSeatEventId}/calendar`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(calendarRes.status === 200, "Calendar export download returns HTTP 200");
+
+  // Test E24: Calendar export has text/calendar Content-Type
+  const calendarContentType = calendarRes.headers.get("content-type") || "";
+  assert(calendarContentType.includes("text/calendar"), "Calendar export has text/calendar header");
+
+  // Test E25: Calendar content contains RFC 5545 components
+  const icsText = await calendarRes.text();
+  assert(icsText.includes("BEGIN:VCALENDAR") && icsText.includes("BEGIN:VEVENT"), "Calendar export contains valid VCALENDAR and VEVENT blocks");
+
+  // Test E26: Student cancels registration (HTTP 200)
+  const cancelRegRes = await fetch(`${BASE_URL}/api/events/${singleSeatEventId}/cancel-registration`, {
+    method: "POST",
+    headers: { Cookie: studentCookie },
+  });
+  assert(cancelRegRes.status === 200, "Student cancels event registration (HTTP 200)");
+
+  // Test E27: Seat restored after cancellation (seatsRemaining === 1)
+  const eventAfterCancelRes = await fetch(`${BASE_URL}/api/events/${singleSeatEventId}`, {
+    headers: { Cookie: adminCookie },
+  });
+  const eventAfterCancelData = await eventAfterCancelRes.json();
+  assert(eventAfterCancelData.event?.seatsRemaining === 1, "Seat restored to 1 available after cancellation");
+
+  // Test E28: Student blocked from retrieving participant roster (HTTP 403)
+  const studentParticipantsRes = await fetch(`${BASE_URL}/api/events/${testDraftEventId}/participants`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(studentParticipantsRes.status === 403, "Student blocked from participant roster (HTTP 403)");
+
+  // Test E29: Faculty retrieves participant roster for their event (HTTP 200)
+  const facultyParticipantsRes = await fetch(`${BASE_URL}/api/events/${testDraftEventId}/participants`, {
+    headers: { Cookie: facultyCookie },
+  });
+  assert(facultyParticipantsRes.status === 200, "Faculty retrieves participant roster (HTTP 200)");
+  const facultyParticipantsData = await facultyParticipantsRes.json();
+
+  // Test E30: Participant roster contains participants array and total
+  assert(Array.isArray(facultyParticipantsData.participants), "Participant roster returns participants array");
+  assert(typeof facultyParticipantsData.total === "number", "Participant roster returns total count");
+
+  // Test E31: Faculty marks participant attendance as PRESENT on evt-002 (HTTP 200)
+  const markPresentRes = await fetch(`${BASE_URL}/api/events/evt-002/attendance`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: facultyCookie },
+    body: JSON.stringify({
+      userId: "demo-student-001",
+      attendanceStatus: "PRESENT",
+    }),
+  });
+  assert(markPresentRes.status === 200, "Faculty marks participant attendance as PRESENT (HTTP 200)");
+  const markPresentData = await markPresentRes.json();
+
+  // Test E32: Participant attendance status is PRESENT and status is ATTENDED
+  assert(markPresentData.participant?.attendanceStatus === "PRESENT", "Participant attendanceStatus updated to PRESENT");
+  assert(markPresentData.participant?.status === "ATTENDED", "Participant registration status updated to ATTENDED");
+
+  // Test E33: Faculty marks participant attendance as ABSENT (HTTP 200)
+  const markAbsentRes = await fetch(`${BASE_URL}/api/events/evt-002/attendance`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: facultyCookie },
+    body: JSON.stringify({
+      userId: "demo-student-001",
+      attendanceStatus: "ABSENT",
+    }),
+  });
+  assert(markAbsentRes.status === 200, "Faculty marks participant attendance as ABSENT (HTTP 200)");
+
+  // Test E34: Student blocked from recording attendance (HTTP 403)
+  const studentMarkAttendanceRes = await fetch(`${BASE_URL}/api/events/evt-002/attendance`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({
+      userId: "demo-student-001",
+      attendanceStatus: "PRESENT",
+    }),
+  });
+  assert(studentMarkAttendanceRes.status === 403, "Student blocked from marking attendance (HTTP 403)");
+
+  // Test E35: Faculty retrieves event analytics (HTTP 200)
+  const facultyEventAnalyticsRes = await fetch(`${BASE_URL}/api/events/evt-002/analytics`, {
+    headers: { Cookie: facultyCookie },
+  });
+  assert(facultyEventAnalyticsRes.status === 200, "Faculty retrieves event analytics (HTTP 200)");
+  const facultyEventAnalyticsData = await facultyEventAnalyticsRes.json();
+
+  // Test E36: Analytics returns capacity, totalRegistered, availableSeats, attendanceRate
+  assert(typeof facultyEventAnalyticsData.analytics?.capacity === "number", "Analytics includes capacity metric");
+  assert(typeof facultyEventAnalyticsData.analytics?.totalRegistered === "number", "Analytics includes totalRegistered metric");
+  assert(typeof facultyEventAnalyticsData.analytics?.availableSeats === "number", "Analytics includes availableSeats metric");
+  assert(typeof facultyEventAnalyticsData.analytics?.attendanceRate === "number", "Analytics includes attendanceRate percentage");
+
+  // Test E37: Student blocked from event analytics (HTTP 403)
+  const studentEventAnalyticsRes = await fetch(`${BASE_URL}/api/events/evt-002/analytics`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(studentEventAnalyticsRes.status === 403, "Student blocked from event analytics (HTTP 403)");
+
+  // Test E38: Admin has universal access to event analytics (HTTP 200)
+  const adminEventAnalyticsRes = await fetch(`${BASE_URL}/api/events/evt-002/analytics`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(adminEventAnalyticsRes.status === 200, "Admin has universal access to event analytics (HTTP 200)");
+
   console.log("\n==================================================");
   console.log(`FINAL RESULT: ${passed} PASSED, ${failed} FAILED`);
   console.log("==================================================");

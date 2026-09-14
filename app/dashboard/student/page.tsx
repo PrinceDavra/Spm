@@ -4,6 +4,7 @@ import { AttendanceService } from "@/services/attendance.service";
 import { TimetableService } from "@/services/timetable.service";
 import { AssignmentService } from "@/services/assignment.service";
 import { NoticeService } from "@/services/notice.service";
+import { EventService } from "@/services/event.service";
 import {
   TrendingUp,
   CalendarDays,
@@ -18,11 +19,21 @@ import {
   Clock,
   BookOpen,
   BellRing,
+  Award,
+  MapPin,
 } from "lucide-react";
 import Link from "next/link";
 
 export default async function StudentDashboardPage() {
   const user = await requireRole([Role.STUDENT, Role.ADMIN]);
+
+  // Fetch upcoming campus events
+  const { events: upcomingEvents } = await EventService.getEvents({
+    userId: user.id,
+    role: Role.STUDENT,
+    tab: "upcoming",
+    limit: 4,
+  });
 
   // Fetch real database-backed attendance summary & history
   const summary = await AttendanceService.getStudentSummary(user.id);
@@ -424,6 +435,75 @@ export default async function StudentDashboardPage() {
                     month: "short",
                     day: "numeric",
                   })}
+                </span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* Upcoming Campus Events Section */}
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+          <div className="flex items-center gap-2">
+            <Award className="h-5 w-5 text-primary" />
+            <div>
+              <h2 className="text-base font-bold text-foreground">
+                Upcoming Campus Events
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Hackathons, technical masterclasses, competitions, and placement bootcamps
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/student/events"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition shadow-sm self-start sm:self-auto"
+          >
+            Explore Events
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {upcomingEvents.map((evt) => (
+            <Link
+              key={evt.id}
+              href={`/dashboard/student/events/${evt.id}`}
+              className="p-4 rounded-xl border border-border bg-muted/30 hover:bg-muted/60 transition-colors flex flex-col justify-between group"
+            >
+              <div>
+                <div className="flex items-center justify-between text-xs mb-1.5">
+                  <span className="font-semibold text-primary">{evt.category}</span>
+                  {evt.isUserRegistered ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" />
+                      <span>Registered</span>
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                      {evt.seatsRemaining} seats left
+                    </span>
+                  )}
+                </div>
+                <h4 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-2">
+                  {evt.title}
+                </h4>
+                <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1.5">
+                  <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
+                  <span className="truncate">{evt.venue}</span>
+                </div>
+              </div>
+              <div className="text-[11px] text-muted-foreground pt-3 border-t border-border/50 flex justify-between mt-3">
+                <span>
+                  {new Date(evt.startDateTime).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </span>
+                <span className="font-semibold text-primary group-hover:underline inline-flex items-center gap-1">
+                  View Pass
+                  <ArrowRight className="h-3 w-3" />
                 </span>
               </div>
             </Link>

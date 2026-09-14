@@ -1,6 +1,7 @@
 import { Role } from "@prisma/client";
 import { requireRole } from "@/lib/auth/rbac";
 import { NoticeService } from "@/services/notice.service";
+import { EventService } from "@/services/event.service";
 import {
   Users,
   Building2,
@@ -11,12 +12,19 @@ import {
   Sparkles,
   ArrowRight,
   BellRing,
+  Award,
 } from "lucide-react";
 import Link from "next/link";
 
 export default async function AdminDashboardPage() {
   const user = await requireRole([Role.ADMIN]);
   const noticeAnalytics = await NoticeService.getNoticeAnalytics(user.id, Role.ADMIN);
+  const eventSummary = await EventService.getOrganizerSummary(user.id, Role.ADMIN);
+  const { total: totalUpcomingEvents } = await EventService.getEvents({
+    userId: user.id,
+    role: Role.ADMIN,
+    tab: "upcoming",
+  });
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -173,6 +181,56 @@ export default async function AdminDashboardPage() {
             <div className="text-xs font-semibold text-muted-foreground">Campus Read Rate</div>
             <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">{noticeAnalytics.metrics.averageReadRate}%</div>
             <div className="text-[11px] text-muted-foreground">{noticeAnalytics.metrics.totalReads} confirmed reads</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Campus Events & Moderation Section */}
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+          <div className="flex items-center gap-2">
+            <Award className="h-5 w-5 text-primary" />
+            <div>
+              <h2 className="text-base font-bold text-foreground">
+                Campus Events &amp; Extracurricular Governance
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Institutional hackathons, workshops, guest lectures, and campus-wide event moderation
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/admin/events"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition shadow-sm self-start sm:self-auto"
+          >
+            Moderate All Events
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-1">
+            <div className="text-xs font-semibold text-muted-foreground">Active Events</div>
+            <div className="text-2xl font-extrabold text-foreground">{eventSummary.activeEventsCount}</div>
+            <div className="text-[11px] text-muted-foreground">Registrations live</div>
+          </div>
+
+          <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-1">
+            <div className="text-xs font-semibold text-muted-foreground">Upcoming Sessions</div>
+            <div className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">{totalUpcomingEvents}</div>
+            <div className="text-[11px] text-muted-foreground">Scheduled in calendar</div>
+          </div>
+
+          <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-1">
+            <div className="text-xs font-semibold text-muted-foreground">Total Registrations</div>
+            <div className="text-2xl font-extrabold text-purple-600 dark:text-purple-400">{eventSummary.totalRegistrationsCount}</div>
+            <div className="text-[11px] text-muted-foreground">Student RSVP bookings</div>
+          </div>
+
+          <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-1">
+            <div className="text-xs font-semibold text-muted-foreground">Overall Attendance Rate</div>
+            <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">{eventSummary.averageAttendanceRate}%</div>
+            <div className="text-[11px] text-muted-foreground">Verified participant turnout</div>
           </div>
         </div>
       </div>

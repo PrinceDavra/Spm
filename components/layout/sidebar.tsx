@@ -56,6 +56,7 @@ const roleNavItems: Record<Role, NavItem[]> = {
     { name: "Assignments & Grading", href: "/dashboard/faculty/assignments", icon: CheckCircle2 },
     { name: "My Classes & Rosters", href: "/dashboard/faculty/classes", icon: Users },
     { name: "Post Notice", href: "/dashboard/faculty/notices", icon: Megaphone },
+    { name: "Campus Events", href: "/dashboard/faculty/events", icon: Award },
     { name: "Faculty Profile", href: "/dashboard/faculty/profile", icon: User },
   ],
   ADMIN: [
@@ -80,6 +81,7 @@ const roleNavItems: Record<Role, NavItem[]> = {
     { name: "Placement Cell", href: "/dashboard/placement", icon: LayoutDashboard },
     { name: "Recruiting Partners", href: "/dashboard/placement/companies", icon: Building2 },
     { name: "Job Drives", href: "/dashboard/placement/jobs", icon: Briefcase },
+    { name: "Campus Events", href: "/dashboard/placement/events", icon: Award },
     { name: "Student Applicants", href: "/dashboard/placement/applications", icon: FileCheck },
     { name: "Aptitude Question Bank", href: "/dashboard/placement/preparation", icon: BookOpen },
     { name: "Placement Reports", href: "/dashboard/placement/reports", icon: FileSpreadsheet },
