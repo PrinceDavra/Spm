@@ -203,6 +203,23 @@ enum ClubActivityType {
   OTHER
 }
 
+enum PlacementDriveStatus {
+  DRAFT
+  PUBLISHED
+  APPLICATION_CLOSED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  ARCHIVED
+}
+
+enum EmploymentType {
+  FULL_TIME
+  INTERNSHIP
+  INTERNSHIP_TO_FULL_TIME
+  CONTRACT
+}
+
 enum JobType {
   FULL_TIME
   INTERNSHIP
@@ -216,19 +233,51 @@ enum JobStatus {
 enum ApplicationStatus {
   APPLIED
   SHORTLISTED
+  ASSESSMENT
+  INTERVIEW
   INTERVIEW_SCHEDULED
   SELECTED
+  OFFERED
   REJECTED
+  WITHDRAWN
+}
+
+enum QuestionDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum QuizStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  EXPIRED
 }
 
 enum PrepCategory {
-  APTITUDE
+  QUANTITATIVE_APTITUDE
   LOGICAL_REASONING
   VERBAL_ABILITY
+  DATA_INTERPRETATION
+  TECHNICAL_MCQ
+  PROGRAMMING
+  DSA
+  DBMS
+  OPERATING_SYSTEMS
+  NETWORKS
+  OOP
+  HR_INTERVIEW
+  COMPANY_SPECIFIC
+  RESUME_PREPARATION
+  APTITUDE
   CODING
   TECHNICAL_INTERVIEW
-  HR_INTERVIEW
-  RESUME_PREPARATION
 }
 
 enum Difficulty {
@@ -286,6 +335,9 @@ model User {
   coordinatedClubs Club[]            @relation("CoordinatorClubs")
   clubMemberships  ClubMembership[]
   createdActivities ClubActivity[]   @relation("CreatedActivities")
+  createdDrives    PlacementDrive[]  @relation("CreatedDrives")
+  createdQuizzes   Quiz[]            @relation("CreatedQuizzes")
+  statusChanges    ApplicationStatusHistory[] @relation("StatusChanges")
 
   @@index([email])
   @@index([role])
@@ -848,20 +900,62 @@ model ClubEvent {
 // -------------------------------------------------------------
 // PLACEMENT PREPARATION & JOBS
 // -------------------------------------------------------------
+// PLACEMENTS & CORPORATE RELATIONS
+// -------------------------------------------------------------
 
 model PlacementCompany {
   id            String           @id @default(uuid())
   name          String           @unique
+  slug          String           @unique
   website       String?
   industry      String
   logoUrl       String?
   description   String?
+  location      String?
+  companySize   String?          // e.g. "500-1000", "10000+"
   contactPerson String?
   contactEmail  String?
+  contactPhone  String?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
+  drives        PlacementDrive[]
   opportunities JobOpportunity[]
+}
+
+model PlacementDrive {
+  id                  String                 @id @default(uuid())
+  companyId           String
+  title               String
+  slug                String                 @unique
+  role                String
+  employmentType      EmploymentType         @default(FULL_TIME)
+  location            String
+  packageMin          Float
+  packageMax          Float
+  currency            String                 @default("INR")
+  description         String
+  applicationDeadline DateTime
+  driveDate           DateTime?
+  status              PlacementDriveStatus   @default(DRAFT)
+  minCgpa             Float                  @default(6.0)
+  maxBacklogs         Int                    @default(0)
+  allowedDepartments String[]               @default([])
+  allowedSemesters    Int[]                  @default([])
+  requiredSkills      String[]               @default([])
+  batchCriteria       String?
+  bondDetails         String?
+  selectionRounds     String[]               @default([])
+  createdBy           String
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  company             PlacementCompany       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  creator             User                   @relation("CreatedDrives", fields: [createdBy], references: [id], onDelete: Restrict)
+  applications        PlacementApplication[]
+
+  @@index([status, applicationDeadline])
+  @@index([companyId])
 }
 
 model JobOpportunity {
@@ -888,18 +982,64 @@ model JobOpportunity {
 }
 
 model PlacementApplication {
-  id            String            @id @default(uuid())
-  opportunityId String
-  studentId     String
-  resumeUrl     String
-  status        ApplicationStatus @default(APPLIED)
-  appliedAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  id                String                     @id @default(uuid())
+  driveId           String?
+  opportunityId     String?
+  studentId         String
+  resumeUrl         String?
+  studentCgpa       Float?
+  studentDepartment String?
+  status            ApplicationStatus          @default(APPLIED)
+  remarks           String?
+  appliedAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
 
-  opportunity   JobOpportunity    @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
-  student       Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  drive             PlacementDrive?            @relation(fields: [driveId], references: [id], onDelete: Cascade)
+  opportunity       JobOpportunity?            @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  student           Student                    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  statusHistory     ApplicationStatusHistory[]
 
-  @@unique([opportunityId, studentId])
+  @@unique([driveId, studentId])
+  @@index([status])
+}
+
+model ApplicationStatusHistory {
+  id            String               @id @default(uuid())
+  applicationId String
+  oldStatus     ApplicationStatus?
+  newStatus     ApplicationStatus
+  changedBy     String
+  remarks       String?
+  createdAt     DateTime             @default(now())
+
+  application   PlacementApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  changer       User                 @relation("StatusChanges", fields: [changedBy], references: [id], onDelete: Restrict)
+
+  @@index([applicationId])
+}
+
+// -------------------------------------------------------------
+// PREPARATION & TIMED QUIZ ENGINE
+// -------------------------------------------------------------
+
+model PrepQuestion {
+  id                 String             @id @default(uuid())
+  category           PrepCategory
+  question           String
+  options            String[]
+  correctOptionIndex Int
+  explanation        String?
+  difficulty         QuestionDifficulty @default(MEDIUM)
+  topic              String
+  marks              Int                @default(1)
+  isActive           Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  quizQuestions      QuizQuestion[]
+  attemptAnswers     QuizAttemptAnswer[]
+
+  @@index([category, difficulty])
 }
 
 model PreparationResource {
@@ -916,17 +1056,38 @@ model PreparationResource {
 }
 
 model Quiz {
-  id               String        @id @default(uuid())
-  title            String
-  category         PrepCategory
-  timeLimitMinutes Int           @default(30)
-  totalMarks       Int           @default(50)
-  passMarks        Int           @default(25)
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  id              String         @id @default(uuid())
+  title           String
+  slug            String         @unique
+  category        PrepCategory
+  durationSeconds Int            @default(1800) // 30 mins
+  questionCount   Int            @default(10)
+  totalMarks      Int            @default(20)
+  passingMarks    Int            @default(10)
+  status          QuizStatus     @default(DRAFT)
+  createdBy       String
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
-  questions        Question[]
-  attempts         QuizAttempt[]
+  creator         User           @relation("CreatedQuizzes", fields: [createdBy], references: [id], onDelete: Restrict)
+  quizQuestions   QuizQuestion[]
+  questions       Question[]
+  attempts        QuizAttempt[]
+
+  @@index([status, category])
+}
+
+model QuizQuestion {
+  id         String       @id @default(uuid())
+  quizId     String
+  questionId String
+  order      Int          @default(0)
+
+  quiz       Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  question   PrepQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([quizId, questionId])
+  @@index([quizId])
 }
 
 model Question {
@@ -942,19 +1103,44 @@ model Question {
 }
 
 model QuizAttempt {
-  id          String    @id @default(uuid())
-  quizId      String
-  studentId   String
-  score       Float
-  passed      Boolean
-  startedAt   DateTime  @default(now())
-  completedAt DateTime?
-  answers     Json      // Record student selections
+  id               String              @id @default(uuid())
+  quizId           String
+  studentId        String
+  status           AttemptStatus       @default(IN_PROGRESS)
+  startedAt        DateTime            @default(now())
+  expiresAt        DateTime
+  submittedAt      DateTime?
+  score            Float               @default(0.0)
+  percentage       Float               @default(0.0)
+  passed           Boolean             @default(false)
+  totalCorrect     Int                 @default(0)
+  totalIncorrect   Int                 @default(0)
+  totalUnanswered  Int                 @default(0)
+  timeTakenSeconds Int                 @default(0)
+  answers          Json?               // Student selections map
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
-  quiz        Quiz      @relation(fields: [quizId], references: [id], onDelete: Cascade)
-  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  quiz             Quiz                @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  student          Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  attemptAnswers   QuizAttemptAnswer[]
 
   @@index([studentId, quizId])
+  @@index([status])
+}
+
+model QuizAttemptAnswer {
+  id                  String       @id @default(uuid())
+  attemptId           String
+  questionId          String
+  selectedOptionIndex Int?
+  isCorrect           Boolean      @default(false)
+  marksAwarded        Float        @default(0.0)
+
+  attempt             QuizAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question            PrepQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, questionId])
 }
 
 // -------------------------------------------------------------

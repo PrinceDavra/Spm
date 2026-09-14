@@ -1232,11 +1232,12 @@ async function runTests() {
   assert(Array.isArray(c_clubDetailData.club?.activities), "C9: Club detail includes activities list");
 
   // Test C10: Admin creates a DRAFT club (HTTP 201)
+  const c_testClubName = `Autonomous Systems Club ${Date.now().toString(36)}`;
   const c_createClubRes = await fetch(`${BASE_URL}/api/clubs`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Cookie: adminCookie },
     body: JSON.stringify({
-      name: "Autonomous Systems Club",
+      name: c_testClubName,
       category: "ROBOTICS",
       description: "Dedicated to building autonomous ground vehicles, drone swarms, and perception pipelines for university challenges.",
       shortDescription: "Autonomous rovers and drone engineering guild.",
@@ -1481,6 +1482,358 @@ async function runTests() {
     headers: { Cookie: adminCookie },
   });
   assert(c_adminAnalyticsRes.status === 200, "C38: Admin universal access to club analytics (HTTP 200)");
+
+  // --- PHASE 10 PLACEMENTS, PREPARATION & TIMED QUIZZES TESTS ---
+  console.log("\n--- Phase 10 Placement Drives, Prep Bank, Timed Quizzes & Application Tracker Tests ---");
+
+  // Step 1: Placement Officer Login
+  const pl_officerLoginRes = await fetch(`${BASE_URL}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "placement@campussphere.edu", password: "PlacementPassword@123" }),
+  });
+  const placementCookie = pl_officerLoginRes.headers.get("set-cookie") || "";
+  assert(pl_officerLoginRes.status === 200, "PL1: Placement Officer login succeeds (HTTP 200)");
+
+  // Step 2: Placement Officer creates new company partner
+  const pl_compName = `Stripe Global ${Date.now().toString(36)}`;
+  const pl_createCompRes = await fetch(`${BASE_URL}/api/placements/companies`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: placementCookie },
+    body: JSON.stringify({
+      name: pl_compName,
+      industry: "Financial Infrastructure",
+      website: "https://stripe.com",
+      location: "Bangalore",
+      companySize: "5,000+",
+      contactPerson: "Aditi Rao",
+      contactEmail: "campus@stripe.com",
+    }),
+  });
+  assert(pl_createCompRes.status === 201, "PL2: Placement Officer creates company partner (HTTP 201)");
+  const pl_createCompData = await pl_createCompRes.json();
+  const pl_testCompanyId = pl_createCompData.company?.id;
+
+  // Step 3: Duplicate company name rejected
+  const pl_dupCompRes = await fetch(`${BASE_URL}/api/placements/companies`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: placementCookie },
+    body: JSON.stringify({
+      name: pl_compName,
+      industry: "FinTech",
+    }),
+  });
+  assert(pl_dupCompRes.status === 409, "PL3: Duplicate company registration rejected (HTTP 409)");
+
+  // Step 4: Student forbidden from creating company (HTTP 403)
+  const pl_studentCompRes = await fetch(`${BASE_URL}/api/placements/companies`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({ name: "HackerLLC", industry: "Crypto" }),
+  });
+  assert(pl_studentCompRes.status === 403, "PL4: Student forbidden from registering companies (HTTP 403)");
+
+  // Step 5: List companies
+  const pl_listCompRes = await fetch(`${BASE_URL}/api/placements/companies?search=${encodeURIComponent(pl_compName)}`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(pl_listCompRes.status === 200, "PL5: Companies directory queried (HTTP 200)");
+  const pl_listCompData = await pl_listCompRes.json();
+  assert(pl_listCompData.companies?.some((c) => c.id === pl_testCompanyId), "PL5b: Newly registered company returned in search");
+
+  // Step 6: Create Placement Drive in DRAFT status
+  const pl_driveTitle = `Core Systems Engineer ${Date.now().toString(36)}`;
+  const pl_createDriveRes = await fetch(`${BASE_URL}/api/placements/drives`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: placementCookie },
+    body: JSON.stringify({
+      companyId: pl_testCompanyId,
+      title: pl_driveTitle,
+      role: "Backend Platform Engineer",
+      employmentType: "FULL_TIME",
+      location: "Bangalore",
+      packageMin: 18,
+      packageMax: 26,
+      description: "Design high-reliability distributed payment routers with 99.999% SLA.",
+      applicationDeadline: "2026-11-30T23:59:59.000Z",
+      minCgpa: 8.0,
+      maxBacklogs: 0,
+      allowedDepartments: ["Computer Engineering", "Computer Science"],
+      allowedSemesters: [6, 7, 8],
+      selectionRounds: ["Online Assessment", "Architecture Discussion", "Hiring Manager"],
+    }),
+  });
+  assert(pl_createDriveRes.status === 201, "PL6: Placement Officer creates drive in DRAFT state (HTTP 201)");
+  const pl_createDriveData = await pl_createDriveRes.json();
+  const pl_testDriveId = pl_createDriveData.drive?.id;
+  assert(pl_createDriveData.drive?.status === "DRAFT", "PL6b: New drive initializes in DRAFT status");
+
+  // Step 7: Draft drive is hidden from students during discovery
+  const pl_studentDrivesRes = await fetch(`${BASE_URL}/api/placements/drives`, {
+    headers: { Cookie: studentCookie },
+  });
+  const pl_studentDrivesData = await pl_studentDrivesRes.json();
+  assert(!pl_studentDrivesData.drives?.some((d) => d.id === pl_testDriveId), "PL7: Draft drive is concealed from student discovery");
+
+  // Step 8: Student forbidden from direct access to draft drive
+  const pl_studentDraftDirectRes = await fetch(`${BASE_URL}/api/placements/drives/${pl_testDriveId}`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(pl_studentDraftDirectRes.status === 403, "PL8: Direct student access to draft drive blocked (HTTP 403)");
+
+  // Step 9: Publish the Placement Drive
+  const pl_publishRes = await fetch(`${BASE_URL}/api/placements/drives/${pl_testDriveId}/publish`, {
+    method: "POST",
+    headers: { Cookie: placementCookie },
+  });
+  assert(pl_publishRes.status === 200, "PL9: Placement Officer publishes drive (HTTP 200)");
+  const pl_publishData = await pl_publishRes.json();
+  assert(pl_publishData.drive?.status === "PUBLISHED", "PL9b: Drive status transitioned to PUBLISHED");
+
+  // Step 10: Student can now discover the published drive
+  const pl_studentDiscoverRes = await fetch(`${BASE_URL}/api/placements/drives/${pl_testDriveId}`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(pl_studentDiscoverRes.status === 200, "PL10: Student can now view published drive (HTTP 200)");
+  const pl_studentDiscoverData = await pl_studentDiscoverRes.json();
+  assert(pl_studentDiscoverData.eligibility !== null, "PL10b: Response includes server-calculated eligibility");
+
+  // Step 11: Dedicated Server Eligibility Check endpoint
+  const pl_eligibilityRes = await fetch(`${BASE_URL}/api/placements/drives/${pl_testDriveId}/eligibility`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(pl_eligibilityRes.status === 200, "PL11: Server evaluates student eligibility (HTTP 200)");
+  const pl_eligibilityData = await pl_eligibilityRes.json();
+  assert(typeof pl_eligibilityData.eligibility?.isEligible === "boolean", "PL11b: Eligibility evaluation boolean returned");
+  assert(Array.isArray(pl_eligibilityData.eligibility?.criteria), "PL11c: Transparent criteria breakdown returned");
+
+  // Step 12: Student applies to eligible drive
+  const pl_applyRes = await fetch(`${BASE_URL}/api/placements/drives/${pl_testDriveId}/apply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({
+      resumeUrl: "https://campussphere.edu/resumes/tirth-resume.pdf",
+      coverNote: "Live HTTP verified candidate application.",
+    }),
+  });
+  assert(pl_applyRes.status === 201, "PL12: Student submits application to eligible drive (HTTP 201)");
+  const pl_applyData = await pl_applyRes.json();
+  const pl_testApplicationId = pl_applyData.application?.id;
+  assert(pl_applyData.application?.status === "APPLIED", "PL12b: Application initialized in APPLIED status");
+
+  // Step 13: Duplicate application strictly rejected
+  const pl_dupApplyRes = await fetch(`${BASE_URL}/api/placements/drives/${pl_testDriveId}/apply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({
+      resumeUrl: "https://campussphere.edu/resumes/tirth-resume.pdf",
+    }),
+  });
+  assert(pl_dupApplyRes.status === 409, "PL13: Duplicate application rejected (HTTP 409)");
+
+  // Step 14: Student cannot apply to closed drive
+  const pl_ineligibleApplyRes = await fetch(`${BASE_URL}/api/placements/drives/drv-012/apply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({ resumeUrl: "https://campussphere.edu/resumes/test.pdf" }),
+  });
+  assert(pl_ineligibleApplyRes.status === 400 || pl_ineligibleApplyRes.status === 403, "PL14: Ineligible or closed drive application blocked");
+
+  // Step 15: Student views own applications list
+  const pl_myAppsRes = await fetch(`${BASE_URL}/api/placements/applications`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(pl_myAppsRes.status === 200, "PL15: Student views applications list (HTTP 200)");
+  const pl_myAppsData = await pl_myAppsRes.json();
+  assert(pl_myAppsData.applications?.some((a) => a.id === pl_testApplicationId), "PL15b: Newly created application listed in student applications");
+
+  // Step 16: Student views specific application details
+  const pl_appDetailRes = await fetch(`${BASE_URL}/api/placements/applications/${pl_testApplicationId}`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(pl_appDetailRes.status === 200, "PL16: Student retrieves single application details (HTTP 200)");
+
+  // Step 17: Student forbidden from modifying official application status
+  const pl_hackStatusRes = await fetch(`${BASE_URL}/api/placements/applications/${pl_testApplicationId}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({ status: "OFFERED", remarks: "Self-promoted" }),
+  });
+  assert(pl_hackStatusRes.status === 403, "PL17: Student forbidden from updating official application status (HTTP 403)");
+
+  // Step 18: Placement Officer views drive applicants
+  const pl_officerAppsRes = await fetch(`${BASE_URL}/api/placements/applications?driveId=${pl_testDriveId}`, {
+    headers: { Cookie: placementCookie },
+  });
+  assert(pl_officerAppsRes.status === 200, "PL18: Placement Officer queries drive applicants (HTTP 200)");
+  const pl_officerAppsData = await pl_officerAppsRes.json();
+  assert(pl_officerAppsData.applications?.some((a) => a.id === pl_testApplicationId), "PL18b: Candidate application visible to Placement Officer");
+
+  // Step 19: Placement Officer advances candidate to SHORTLISTED
+  const pl_shortlistRes = await fetch(`${BASE_URL}/api/placements/applications/${pl_testApplicationId}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: placementCookie },
+    body: JSON.stringify({
+      status: "SHORTLISTED",
+      remarks: "Candidate verified against CGPA and cloud systems skills.",
+    }),
+  });
+  assert(pl_shortlistRes.status === 200, "PL19: Placement Officer transitions candidate to SHORTLISTED (HTTP 200)");
+  const pl_shortlistData = await pl_shortlistRes.json();
+  assert(pl_shortlistData.application?.status === "SHORTLISTED", "PL19b: Candidate application status is now SHORTLISTED");
+
+  // Step 20: Audit history records transition
+  const pl_historyRes = await fetch(`${BASE_URL}/api/placements/applications/${pl_testApplicationId}/history`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(pl_historyRes.status === 200, "PL20: Application audit history retrieved (HTTP 200)");
+  const pl_historyData = await pl_historyRes.json();
+  assert(pl_historyData.history?.some((h) => h.newStatus === "SHORTLISTED"), "PL20b: History contains SHORTLISTED audit entry");
+
+  // Step 21: Student voluntarily withdraws application
+  const pl_withdrawRes = await fetch(`${BASE_URL}/api/placements/applications/${pl_testApplicationId}/withdraw`, {
+    method: "POST",
+    headers: { Cookie: studentCookie },
+  });
+  assert(pl_withdrawRes.status === 200, "PL21: Student withdraws application (HTTP 200)");
+  const pl_withdrawData = await pl_withdrawRes.json();
+  assert(pl_withdrawData.application?.status === "WITHDRAWN", "PL21b: Application status marked WITHDRAWN");
+
+  // Step 22: Browse preparation categories
+  const pl_categoriesRes = await fetch(`${BASE_URL}/api/preparation/categories`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(pl_categoriesRes.status === 200, "PL22: Preparation categories retrieved (HTTP 200)");
+  const pl_categoriesData = await pl_categoriesRes.json();
+  assert(pl_categoriesData.categories?.length >= 10, "PL22b: Contains at least 10 prep topic categories");
+
+  // Step 23: Student browses questions WITHOUT leaking answer keys
+  const pl_questionsRes = await fetch(`${BASE_URL}/api/preparation/questions?category=DSA`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(pl_questionsRes.status === 200, "PL23: Student browses preparation question bank (HTTP 200)");
+  const pl_questionsData = await pl_questionsRes.json();
+  assert(pl_questionsData.questions?.length > 0, "PL23b: Questions returned for DSA category");
+  assert(pl_questionsData.questions[0].correctOptionIndex === undefined, "PL23c: Question correct answer key strictly hidden from students");
+  assert(pl_questionsData.questions[0].explanation === undefined, "PL23d: Question explanation strictly hidden from students before test");
+
+  // Step 24: Placement Officer adds new prep question
+  const pl_createQRes = await fetch(`${BASE_URL}/api/preparation/questions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: placementCookie },
+    body: JSON.stringify({
+      category: "OPERATING_SYSTEMS",
+      question: "Which CPU scheduling algorithm gives minimum average waiting time?",
+      options: ["FCFS", "SJF (Shortest Job First)", "Round Robin", "Priority Scheduling"],
+      correctOptionIndex: 1,
+      explanation: "Shortest Job First (SJF) is provably optimal for minimizing average waiting time.",
+      difficulty: "MEDIUM",
+      topic: "CPU Scheduling",
+      marks: 2,
+    }),
+  });
+  assert(pl_createQRes.status === 201, "PL24: Placement Officer authors question in repository (HTTP 201)");
+
+  // Step 25: Student forbidden from authoring questions (HTTP 403)
+  const pl_studentCreateQRes = await fetch(`${BASE_URL}/api/preparation/questions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({
+      category: "DSA",
+      question: "Unauthorized question?",
+      options: ["A", "B"],
+      correctOptionIndex: 0,
+      difficulty: "EASY",
+      topic: "Hack",
+    }),
+  });
+  assert(pl_studentCreateQRes.status === 403, "PL25: Student forbidden from authoring questions (HTTP 403)");
+
+  // Step 26: Discover available quizzes
+  const pl_quizzesRes = await fetch(`${BASE_URL}/api/preparation/quizzes`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(pl_quizzesRes.status === 200, "PL26: Student queries available quizzes (HTTP 200)");
+  const pl_quizzesData = await pl_quizzesRes.json();
+  assert(pl_quizzesData.quizzes?.length >= 5, "PL26b: Contains curated placement assessment quizzes");
+
+  // Step 27: Start timed quiz attempt
+  const pl_startQuizRes = await fetch(`${BASE_URL}/api/preparation/quizzes/qz-001/start`, {
+    method: "POST",
+    headers: { Cookie: studentCookie },
+  });
+  assert(pl_startQuizRes.status === 201 || pl_startQuizRes.status === 200, "PL27: Student starts timed quiz attempt");
+  const pl_startQuizData = await pl_startQuizRes.json();
+  const pl_testAttemptId = pl_startQuizData.attempt?.id;
+  assert(pl_startQuizData.attempt?.status === "IN_PROGRESS", "PL27b: Quiz attempt is in IN_PROGRESS status");
+  assert(pl_startQuizData.attempt?.questions[0].correctOptionIndex === undefined, "PL27c: Active attempt questions do not expose correct answers");
+
+  // Step 28: Record answers during quiz attempt
+  const pl_firstQId = pl_startQuizData.attempt?.questions[0].id;
+  const pl_answerRes = await fetch(`${BASE_URL}/api/preparation/attempts/${pl_testAttemptId}/answer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({
+      questionId: pl_firstQId,
+      selectedOptionIndex: 0,
+    }),
+  });
+  assert(pl_answerRes.status === 200, "PL28: Student autosaves answer during quiz attempt (HTTP 200)");
+
+  // Step 29: Finalize & Submit attempt for authoritative server-side grading
+  const pl_submitQuizRes = await fetch(`${BASE_URL}/api/preparation/attempts/${pl_testAttemptId}/submit`, {
+    method: "POST",
+    headers: { Cookie: studentCookie },
+  });
+  assert(pl_submitQuizRes.status === 200, "PL29: Student submits quiz attempt for server grading (HTTP 200)");
+  const pl_submitQuizData = await pl_submitQuizRes.json();
+  assert(typeof pl_submitQuizData.result?.score === "number", "PL29b: Score graded authoritatively by server");
+  assert(typeof pl_submitQuizData.result?.percentage === "number", "PL29c: Percentage calculated by server");
+  assert(typeof pl_submitQuizData.result?.passed === "boolean", "PL29d: Passing outcome calculated by server");
+
+  // Step 30: Detailed attempt review reveals question explanations post-submission
+  const pl_attemptResultRes = await fetch(`${BASE_URL}/api/preparation/attempts/${pl_testAttemptId}`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(pl_attemptResultRes.status === 200, "PL30: Attempt result and explanations retrieved (HTTP 200)");
+  const pl_attemptResultData = await pl_attemptResultRes.json();
+  assert(pl_attemptResultData.attempt?.review?.questions[0]?.explanation !== undefined, "PL30b: Explanations revealed after submission");
+
+  // Step 31: Student Placement Readiness Index calculation
+  const pl_readinessRes = await fetch(`${BASE_URL}/api/preparation/my-progress`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(pl_readinessRes.status === 200, "PL31: Student Placement Readiness Score retrieved (HTTP 200)");
+  const pl_readinessData = await pl_readinessRes.json();
+  assert(typeof pl_readinessData.readiness?.readinessScore === "number", "PL31b: Readiness score is a verified numerical index");
+  assert(pl_readinessData.readiness?.readinessScore >= 0 && pl_readinessData.readiness?.readinessScore <= 100, "PL31c: Readiness score bounded in 0-100 range");
+  assert(pl_readinessData.readiness?.readinessTier !== undefined, "PL31d: Readiness tier assigned");
+
+  // Step 32: Institutional Placement Analytics overview
+  const pl_officerAnalyticsRes = await fetch(`${BASE_URL}/api/placements/analytics`, {
+    headers: { Cookie: placementCookie },
+  });
+  assert(pl_officerAnalyticsRes.status === 200, "PL32: Placement Officer queries institutional analytics (HTTP 200)");
+  const pl_officerAnalyticsData = await pl_officerAnalyticsRes.json();
+  assert(pl_officerAnalyticsData.analytics?.totalDrives > 0, "PL32b: Analytics tracks total active drives");
+  assert(typeof pl_officerAnalyticsData.analytics?.conversionRate === "number", "PL32c: Analytics computes placement conversion rate");
+
+  // Step 33: Student queries own readiness via analytics endpoint
+  const pl_studentAnalyticsRes = await fetch(`${BASE_URL}/api/placements/analytics`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(pl_studentAnalyticsRes.status === 200, "PL33: Student queries readiness summary via analytics endpoint (HTTP 200)");
+  const pl_studentAnalyticsData = await pl_studentAnalyticsRes.json();
+  assert(pl_studentAnalyticsData.type === "STUDENT_READINESS", "PL33b: Correctly routed to STUDENT_READINESS payload");
+
+  // Step 34: Close drive applications
+  const pl_closeDriveRes = await fetch(`${BASE_URL}/api/placements/drives/${pl_testDriveId}/close`, {
+    method: "POST",
+    headers: { Cookie: placementCookie },
+  });
+  assert(pl_closeDriveRes.status === 200, "PL34: Placement Officer closes drive applications (HTTP 200)");
+  const pl_closeDriveData = await pl_closeDriveRes.json();
+  assert(pl_closeDriveData.drive?.status === "APPLICATION_CLOSED", "PL34b: Drive status changed to APPLICATION_CLOSED");
 
   console.log("\n==================================================");
   console.log(`FINAL RESULT: ${passed} PASSED, ${failed} FAILED`);
