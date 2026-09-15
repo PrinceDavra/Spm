@@ -3105,6 +3105,453 @@ async function runTests() {
   });
   assert(an_studentExportRes.status === 403, "AN42: Student blocked from administrative CSV export (HTTP 403)");
 
+  // =========================================================================
+  // PHASE 15 — EXAM MANAGEMENT, GRADEBOOK, RESULTS & TRANSCRIPTS TESTS
+  // =========================================================================
+  console.log("\n--- Phase 15 Exam Management, Gradebook, Results & Transcripts Tests ---");
+
+  // Step EX01: Unauthenticated request to /api/exams is rejected (HTTP 401)
+  const ex_unauthRes = await fetch(`${BASE_URL}/api/exams`);
+  assert(ex_unauthRes.status === 401, "EX01: Unauthenticated request to /api/exams rejected (HTTP 401)");
+
+  // Step EX02: Student queries /api/exams receives filtered exam schedule (HTTP 200)
+  const ex_studentListRes = await fetch(`${BASE_URL}/api/exams`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(ex_studentListRes.status === 200, "EX02: Student queries /api/exams (HTTP 200)");
+  const ex_studentListData = await ex_studentListRes.json();
+  assert(Array.isArray(ex_studentListData.exams), "EX02b: Student receives exams array");
+
+  // Step EX03: Student forbidden from creating new exams (HTTP 403)
+  const ex_studentCreateRes = await fetch(`${BASE_URL}/api/exams`, {
+    method: "POST",
+    headers: { Cookie: studentCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Student Exam Hack",
+      examType: "INTERNAL",
+      academicYear: "2024-2025",
+      semesterNumber: 6,
+      departmentId: "dept-comp",
+      subjectId: "subj-dbms",
+      date: "2026-06-15",
+      startTime: "10:00",
+      endTime: "11:30",
+      maxMarks: 50,
+      passingMarks: 20,
+    }),
+  });
+  assert(ex_studentCreateRes.status === 403, "EX03: Student forbidden from creating exams (HTTP 403)");
+
+  // Step EX04: Invalid exam validation: Passing marks > maxMarks rejected (HTTP 400)
+  const ex_invalidMarksRes = await fetch(`${BASE_URL}/api/exams`, {
+    method: "POST",
+    headers: { Cookie: adminCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Invalid Marks Exam",
+      examType: "MIDTERM",
+      academicYear: "2024-2025",
+      semesterNumber: 6,
+      departmentId: "dept-comp",
+      subjectId: "subj-dbms",
+      date: "2026-06-15",
+      startTime: "10:00",
+      endTime: "11:30",
+      maxMarks: 40,
+      passingMarks: 50,
+    }),
+  });
+  assert(ex_invalidMarksRes.status === 400, "EX04: Passing marks exceeding max marks rejected (HTTP 400)");
+
+  // Step EX05: Invalid exam validation: End time before start time rejected (HTTP 400)
+  const ex_invalidTimeRes = await fetch(`${BASE_URL}/api/exams`, {
+    method: "POST",
+    headers: { Cookie: adminCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Invalid Time Exam",
+      examType: "MIDTERM",
+      academicYear: "2024-2025",
+      semesterNumber: 6,
+      departmentId: "dept-comp",
+      subjectId: "subj-dbms",
+      date: "2026-06-15",
+      startTime: "14:00",
+      endTime: "13:00",
+      maxMarks: 50,
+      passingMarks: 20,
+    }),
+  });
+  assert(ex_invalidTimeRes.status === 400, "EX05: End time before start time rejected (HTTP 400)");
+
+  // Step EX06: Admin creates new draft exam (HTTP 201)
+  const ex_createRes = await fetch(`${BASE_URL}/api/exams`, {
+    method: "POST",
+    headers: { Cookie: adminCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Comprehensive Architecture Assessment",
+      examType: "INTERNAL",
+      academicYear: "2024-2025",
+      semesterNumber: 6,
+      departmentId: "dept-comp",
+      subjectId: "subj-dbms",
+      date: "2026-07-25",
+      startTime: "10:00",
+      endTime: "12:00",
+      maxMarks: 60,
+      passingMarks: 24,
+      instructions: "Comprehensive test covering transaction serialization and isolation levels.",
+    }),
+  });
+  assert(ex_createRes.status === 201, "EX06: Admin creates draft exam (HTTP 201)");
+  const ex_createData = await ex_createRes.json();
+  const createdExamId = ex_createData.exam?.id;
+  assert(createdExamId && ex_createData.exam?.status === "DRAFT", "EX06b: Exam created in DRAFT status");
+
+  // Step EX07: Admin fetches exam details via /api/exams/[id] (HTTP 200)
+  const ex_detailRes = await fetch(`${BASE_URL}/api/exams/${createdExamId}`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(ex_detailRes.status === 200, "EX07: Admin fetches exam details (HTTP 200)");
+  const ex_detailData = await ex_detailRes.json();
+  assert(ex_detailData.exam?.title === "Comprehensive Architecture Assessment", "EX07b: Details return exact exam title");
+
+  // Step EX08: Admin updates draft exam attributes via PATCH /api/exams/[id] (HTTP 200)
+  const ex_updateRes = await fetch(`${BASE_URL}/api/exams/${createdExamId}`, {
+    method: "PATCH",
+    headers: { Cookie: adminCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Advanced Database Architecture Assessment",
+      maxMarks: 75,
+      passingMarks: 30,
+    }),
+  });
+  assert(ex_updateRes.status === 200, "EX08: Admin updates draft exam (HTTP 200)");
+  const ex_updateData = await ex_updateRes.json();
+  assert(ex_updateData.exam?.maxMarks === 75, "EX08b: Exam max marks successfully updated to 75");
+
+  // Step EX09: Schedule conflict check — room collision rejected (HTTP 409)
+  // exam-005 is in room-302 on 2026-04-24 from 10:00 to 13:00
+  const ex_roomConflictRes = await fetch(`${BASE_URL}/api/exams/${createdExamId}/schedule`, {
+    method: "POST",
+    headers: { Cookie: adminCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      date: "2026-04-24",
+      startTime: "11:00",
+      endTime: "12:30",
+      roomId: "room-302",
+      facultyId: "demo-faculty-002",
+    }),
+  });
+  assert(ex_roomConflictRes.status === 409, "EX09: Room collision during scheduling returns HTTP 409");
+
+  // Step EX10: Schedule conflict check — faculty collision rejected (HTTP 409)
+  // exam-005 invigilator demo-faculty-001 on 2026-04-24 from 10:00 to 13:00
+  const ex_facConflictRes = await fetch(`${BASE_URL}/api/exams/${createdExamId}/schedule`, {
+    method: "POST",
+    headers: { Cookie: adminCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      date: "2026-04-24",
+      startTime: "10:30",
+      endTime: "12:00",
+      roomId: "room-201",
+      facultyId: "demo-faculty-001",
+    }),
+  });
+  assert(ex_facConflictRes.status === 409, "EX10: Faculty invigilator clash returns HTTP 409");
+
+  // Step EX11: Admin schedules exam without conflicts (HTTP 200)
+  const ex_scheduleRes = await fetch(`${BASE_URL}/api/exams/${createdExamId}/schedule`, {
+    method: "POST",
+    headers: { Cookie: adminCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      date: "2026-07-25",
+      startTime: "10:00",
+      endTime: "12:00",
+      roomId: "room-201",
+      facultyId: "demo-faculty-001",
+      divisionId: "div-comp-a",
+    }),
+  });
+  assert(ex_scheduleRes.status === 200, "EX11: Admin schedules exam without conflict (HTTP 200)");
+  const ex_schedData = await ex_scheduleRes.json();
+  assert(ex_schedData.exam?.status === "SCHEDULED", "EX11b: Exam status transitioned to SCHEDULED");
+
+  // Step EX12: Admin inspects candidate eligibility via /api/exams/[id]/eligibility (HTTP 200)
+  const ex_eligRes = await fetch(`${BASE_URL}/api/exams/${createdExamId}/eligibility`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(ex_eligRes.status === 200, "EX12: Admin inspects candidate eligibility (HTTP 200)");
+  const ex_eligData = await ex_eligRes.json();
+  assert(Array.isArray(ex_eligData.candidates) && ex_eligData.candidates.length > 0, "EX12b: Returns candidate eligibility roster");
+
+  // Step EX13: Faculty queries gradebook for authorized exam (HTTP 200)
+  const ex_gbRes = await fetch(`${BASE_URL}/api/exams/exam-001/gradebook`, {
+    headers: { Cookie: facultyCookie },
+  });
+  assert(ex_gbRes.status === 200, "EX13: Faculty fetches assigned exam gradebook (HTTP 200)");
+  const ex_gbData = await ex_gbRes.json();
+  assert(Array.isArray(ex_gbData.entries) && ex_gbData.entries.length > 0, "EX13b: Gradebook returns enrolled students");
+
+  // Step EX14: Student blocked from accessing class gradebook (HTTP 403)
+  const ex_studentGbRes = await fetch(`${BASE_URL}/api/exams/exam-001/gradebook`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(ex_studentGbRes.status === 403, "EX14: Student forbidden from exam gradebook (HTTP 403)");
+
+  // Step EX15: Faculty enters gradebook marks with deterministic grading (HTTP 200)
+  const ex_gradeSaveRes = await fetch(`${BASE_URL}/api/exams/exam-001/gradebook`, {
+    method: "POST",
+    headers: { Cookie: facultyCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      entries: [
+        {
+          studentId: "demo-student-001",
+          marksObtained: 46,
+          isAbsent: false,
+          remarks: "Exceptional design rationale on distributed consensus.",
+        },
+      ],
+    }),
+  });
+  assert(ex_gradeSaveRes.status === 200, "EX15: Faculty saves gradebook entries (HTTP 200)");
+  const ex_gradeSaveData = await ex_gradeSaveRes.json();
+  assert(ex_gradeSaveData.entries?.[0]?.gradeLetter === "A+", "EX15b: Marks 46/50 (92%) deterministically yields A+");
+
+  // Step EX16: Negative marks rejected in gradebook entry (HTTP 400)
+  const ex_negMarksRes = await fetch(`${BASE_URL}/api/exams/exam-001/gradebook`, {
+    method: "POST",
+    headers: { Cookie: facultyCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      entries: [{ studentId: "demo-student-001", marksObtained: -5, isAbsent: false }],
+    }),
+  });
+  assert(ex_negMarksRes.status === 400, "EX16: Negative marks rejected (HTTP 400)");
+
+  // Step EX17: Marks exceeding maxMarks rejected in gradebook entry (HTTP 400)
+  const ex_exceedMarksRes = await fetch(`${BASE_URL}/api/exams/exam-001/gradebook`, {
+    method: "POST",
+    headers: { Cookie: facultyCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      entries: [{ studentId: "demo-student-001", marksObtained: 99, isAbsent: false }],
+    }),
+  });
+  assert(ex_exceedMarksRes.status === 400, "EX17: Marks exceeding maxMarks rejected (HTTP 400)");
+
+  // Step EX18: Absent candidate correctly recorded with 0 marks and grade F (HTTP 200)
+  const ex_absentRes = await fetch(`${BASE_URL}/api/exams/exam-001/gradebook`, {
+    method: "POST",
+    headers: { Cookie: facultyCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      entries: [{ studentId: "demo-student-004", isAbsent: true, remarks: "Medical absence" }],
+    }),
+  });
+  assert(ex_absentRes.status === 200, "EX18: Absent candidate recorded successfully (HTTP 200)");
+  const ex_absentData = await ex_absentRes.json();
+  const absentEntry = ex_absentData.entries?.find((e) => e.studentId === "demo-student-004");
+  assert(absentEntry && absentEntry.gradeLetter === "F" && absentEntry.marksObtained === 0, "EX18b: Absent candidate mapped to 0 marks and grade F");
+
+  // Step EX19: Student cannot submit grades (HTTP 403)
+  const ex_studentSubmitGradeRes = await fetch(`${BASE_URL}/api/exams/exam-001/gradebook`, {
+    method: "POST",
+    headers: { Cookie: studentCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({ entries: [{ studentId: "demo-student-001", marksObtained: 50 }] }),
+  });
+  assert(ex_studentSubmitGradeRes.status === 403, "EX19: Student forbidden from submitting grades (HTTP 403)");
+
+  // Step EX20: Admin marks exam completed via /api/exams/[id]/complete (HTTP 200)
+  const ex_completeRes = await fetch(`${BASE_URL}/api/exams/${createdExamId}/complete`, {
+    method: "POST",
+    headers: { Cookie: adminCookie },
+  });
+  assert(ex_completeRes.status === 200, "EX20: Admin completes exam transitioning to RESULTS_PENDING (HTTP 200)");
+
+  // Step EX21: Admin publishes exam results (HTTP 200)
+  const ex_publishRes = await fetch(`${BASE_URL}/api/exams/exam-004/publish`, {
+    method: "POST",
+    headers: { Cookie: adminCookie },
+  });
+  assert(ex_publishRes.status === 200, "EX21: Admin publishes exam results (HTTP 200)");
+  const ex_publishData = await ex_publishRes.json();
+  assert(ex_publishData.exam?.status === "PUBLISHED", "EX21b: Exam status transitioned to PUBLISHED");
+
+  // Step EX22: Student forbidden from publishing results (HTTP 403)
+  const ex_studentPubRes = await fetch(`${BASE_URL}/api/exams/exam-004/publish`, {
+    method: "POST",
+    headers: { Cookie: studentCookie },
+  });
+  assert(ex_studentPubRes.status === 403, "EX22: Student forbidden from publishing results (HTTP 403)");
+
+  // Step EX23: Admin locks results against accidental tampering (HTTP 200)
+  const ex_lockRes = await fetch(`${BASE_URL}/api/exams/exam-004/lock`, {
+    method: "POST",
+    headers: { Cookie: adminCookie },
+  });
+  assert(ex_lockRes.status === 200, "EX23: Admin locks exam results (HTTP 200)");
+
+  // Step EX24: Grade modification on locked exam is rejected (HTTP 400)
+  const ex_lockedModRes = await fetch(`${BASE_URL}/api/exams/exam-004/gradebook`, {
+    method: "POST",
+    headers: { Cookie: facultyCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      entries: [{ studentId: "demo-student-001", marksObtained: 40 }],
+    }),
+  });
+  assert(ex_lockedModRes.status === 400, "EX24: Modifying locked exam gradebook rejected (HTTP 400)");
+
+  // Step EX25: Admin queries all results via /api/results (HTTP 200)
+  const ex_allResultsRes = await fetch(`${BASE_URL}/api/results`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(ex_allResultsRes.status === 200, "EX25: Admin queries all results (HTTP 200)");
+
+  // Step EX26: Student queries personal semester results via /api/results/student (HTTP 200)
+  const ex_studentResRes = await fetch(`${BASE_URL}/api/results/student`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(ex_studentResRes.status === 200, "EX26: Student queries personal results (HTTP 200)");
+  const ex_studentResData = await ex_studentResRes.json();
+  assert(typeof ex_studentResData.results?.cumulativeCgpa === "number", "EX26b: Student results contain cumulative CGPA");
+  assert(ex_studentResData.results?.degreeClassification === "First Class with Distinction", "EX26c: Student receives valid degree classification");
+
+  // Step EX27: Student IDOR attempt to view peer student's results is blocked (HTTP 403)
+  const ex_idorResRes = await fetch(`${BASE_URL}/api/results/student?studentId=demo-student-002`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(ex_idorResRes.status === 403, "EX27: Student IDOR attempt on peer results blocked (HTTP 403)");
+
+  // Step EX28: Faculty can query student results by providing studentId (HTTP 200)
+  const ex_facStudentRes = await fetch(`${BASE_URL}/api/results/student?studentId=demo-student-001`, {
+    headers: { Cookie: facultyCookie },
+  });
+  assert(ex_facStudentRes.status === 200, "EX28: Faculty queries student results with studentId (HTTP 200)");
+
+  // Step EX29: Student queries official academic transcript via /api/transcript (HTTP 200)
+  const ex_transcriptRes = await fetch(`${BASE_URL}/api/transcript`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(ex_transcriptRes.status === 200, "EX29: Student queries academic transcript (HTTP 200)");
+  const ex_transcriptData = await ex_transcriptRes.json();
+  assert(ex_transcriptData.transcript?.student?.name === "Aarav Mehta", "EX29b: Transcript identifies authenticated student");
+  assert(Array.isArray(ex_transcriptData.transcript?.semesters) && ex_transcriptData.transcript?.semesters.length >= 5, "EX29c: Transcript includes full semester progression");
+  assert(ex_transcriptData.transcript?.summary?.totalCreditsEarned > 0, "EX29d: Transcript tallies total credits earned");
+
+  // Step EX30: Student IDOR attempt on academic transcript is blocked (HTTP 403)
+  const ex_idorTransRes = await fetch(`${BASE_URL}/api/transcript?studentId=demo-student-002`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(ex_idorTransRes.status === 403, "EX30: Student IDOR attempt on peer transcript blocked (HTTP 403)");
+
+  // Step EX31: Student exports academic transcript as RFC 4180 CSV (HTTP 200, text/csv)
+  const ex_csvTransRes = await fetch(`${BASE_URL}/api/transcript/export?format=csv`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(ex_csvTransRes.status === 200, "EX31: Student exports transcript CSV (HTTP 200)");
+  const ex_csvType = ex_csvTransRes.headers.get("content-type") || "";
+  assert(ex_csvType.includes("text/csv"), "EX31b: Export response Content-Type is text/csv");
+  const ex_csvText = await ex_csvTransRes.text();
+  assert(ex_csvText.includes("Semester,Academic Year") && ex_csvText.includes("Subject Code,Subject Name"), "EX31c: CSV contains standard academic transcript columns");
+
+  // Step EX32: Student exports academic transcript printable view (HTTP 200, text/html)
+  const ex_printTransRes = await fetch(`${BASE_URL}/api/transcript/export?format=print`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(ex_printTransRes.status === 200, "EX32: Student exports printable transcript (HTTP 200)");
+  const ex_printType = ex_printTransRes.headers.get("content-type") || "";
+  assert(ex_printType.includes("text/html"), "EX32b: Printable view Content-Type is text/html");
+  const ex_printHtml = await ex_printTransRes.text();
+  assert(ex_printHtml.includes("OFFICIAL ACADEMIC TRANSCRIPT"), "EX32c: Printable view contains official institutional heading");
+
+  // Step EX33: Student IDOR attempt on transcript export is blocked (HTTP 403)
+  const ex_idorExportRes = await fetch(`${BASE_URL}/api/transcript/export?studentId=demo-student-002`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(ex_idorExportRes.status === 403, "EX33: Student IDOR attempt on transcript export blocked (HTTP 403)");
+
+  // Step EX34: Student submits revaluation request via POST /api/revaluation (HTTP 201)
+  const ex_revSubmitRes = await fetch(`${BASE_URL}/api/revaluation`, {
+    method: "POST",
+    headers: { Cookie: studentCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      examId: "exam-002",
+      subjectId: "sub-cs602",
+      reason: "Requesting total recount for Section C Question 4.",
+      requestedMarks: 49,
+    }),
+  });
+  assert(ex_revSubmitRes.status === 201, "EX34: Student submits revaluation request (HTTP 201)");
+  const ex_revSubmitData = await ex_revSubmitRes.json();
+  const newRevId = ex_revSubmitData.revaluation?.id;
+  assert(newRevId && ex_revSubmitData.revaluation?.status === "PENDING", "EX34b: Revaluation request status initialized to PENDING");
+
+  // Step EX35: Duplicate pending revaluation request from same student rejected (HTTP 400)
+  const ex_revDupRes = await fetch(`${BASE_URL}/api/revaluation`, {
+    method: "POST",
+    headers: { Cookie: studentCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      examId: "exam-002",
+      subjectId: "sub-cs602",
+      reason: "Duplicate submission attempt",
+    }),
+  });
+  assert(ex_revDupRes.status === 400, "EX35: Duplicate pending revaluation request rejected (HTTP 400)");
+
+  // Step EX36: Student queries own revaluation requests via GET /api/revaluation (HTTP 200)
+  const ex_revListRes = await fetch(`${BASE_URL}/api/revaluation`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(ex_revListRes.status === 200, "EX36: Student queries revaluation requests (HTTP 200)");
+  const ex_revListData = await ex_revListRes.json();
+  assert(Array.isArray(ex_revListData.requests) && ex_revListData.requests.length > 0, "EX36b: Student receives active revaluation petitions");
+
+  // Step EX37: Student attempting self-approval of revaluation is blocked (HTTP 403)
+  const ex_selfApproveRes = await fetch(`${BASE_URL}/api/revaluation/${newRevId}`, {
+    method: "PATCH",
+    headers: { Cookie: studentCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      status: "APPROVED",
+      reviewRemarks: "Self approval attempt hack",
+      revisedMarks: 50,
+    }),
+  });
+  assert(ex_selfApproveRes.status === 403, "EX37: Student self-approval of revaluation blocked (HTTP 403)");
+
+  // Step EX38: Admin reviews and approves revaluation request (HTTP 200)
+  const ex_approveRes = await fetch(`${BASE_URL}/api/revaluation/${newRevId}`, {
+    method: "PATCH",
+    headers: { Cookie: adminCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      status: "APPROVED",
+      reviewRemarks: "Re-total verified by Head of Department. 2 marks awarded for Question 4.",
+      revisedMarks: 49,
+    }),
+  });
+  assert(ex_approveRes.status === 200, "EX38: Admin approves revaluation request (HTTP 200)");
+  const ex_approveData = await ex_approveRes.json();
+  assert(ex_approveData.revaluation?.status === "APPROVED", "EX38b: Revaluation transitioned to APPROVED");
+
+  // Step EX39: Admin queries dedicated exam analytics via /api/exams/analytics (HTTP 200)
+  const ex_analyticsRes = await fetch(`${BASE_URL}/api/exams/analytics`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(ex_analyticsRes.status === 200, "EX39: Admin queries dedicated exam analytics (HTTP 200)");
+  const ex_analyticsData = await ex_analyticsRes.json();
+  assert(typeof ex_analyticsData.analytics?.passRate === "number", "EX39b: Exam analytics provides aggregate pass rate");
+  assert(ex_analyticsData.analytics?.gradeDistribution?.["A+"] !== undefined, "EX39c: Exam analytics includes grade distribution");
+
+  // Step EX40: Student blocked from administrative exam analytics (HTTP 403)
+  const ex_studentAnRes = await fetch(`${BASE_URL}/api/exams/analytics`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(ex_studentAnRes.status === 403, "EX40: Student forbidden from exam analytics (HTTP 403)");
+
+  // Step EX41: Integrated Phase 14 Academic Analytics includes authoritative examSummary (HTTP 200)
+  const ex_integratedAcadRes = await fetch(`${BASE_URL}/api/analytics/academic`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(ex_integratedAcadRes.status === 200, "EX41: Admin queries integrated academic analytics (HTTP 200)");
+  const ex_integratedAcadData = await ex_integratedAcadRes.json();
+  assert(ex_integratedAcadData.performance?.examSummary !== undefined, "EX41b: Academic analytics integrates authoritative examSummary");
+  assert(typeof ex_integratedAcadData.performance?.examSummary?.averageExamMarks === "number", "EX41c: Integrated examSummary calculates averageExamMarks");
+
   console.log("\n==================================================");
   console.log(`FINAL RESULT: ${passed} PASSED, ${failed} FAILED`);
   console.log("==================================================");
@@ -3113,4 +3560,5 @@ async function runTests() {
 }
 
 runTests();
+
 

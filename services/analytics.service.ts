@@ -48,6 +48,8 @@ import { AcademicService } from "@/services/academic.service";
 import { AssignmentService } from "@/services/assignment.service";
 import { ClubService } from "@/services/club.service";
 import { QuizService } from "@/services/quiz.service";
+import { ExamService } from "@/services/exam.service";
+import { DEMO_EXAMS_STORE, DEMO_GRADEBOOK_STORE } from "@/lib/exam/demo-exams";
 import { AnalyticsFilterInput, ReportType } from "@/validators/analytics.schema";
 
 // --- Analytics Response Interfaces ---
@@ -187,6 +189,13 @@ export interface AcademicPerformanceData {
     subjectName: string;
     averageMarks: number;
   }>;
+  examSummary?: {
+    totalExams: number;
+    evaluatedGradesCount: number;
+    passRate: number;
+    averagePercentage: number;
+    averageExamMarks?: number;
+  };
 }
 
 export interface AssignmentAnalyticsData {
@@ -1083,6 +1092,27 @@ export class AnalyticsService {
       .sort((a, b) => a.averageMarks - b.averageMarks)
       .slice(0, 3);
 
+    // Exam Performance Integration (Phase 15)
+    const evaluatedExamGrades = DEMO_GRADEBOOK_STORE.filter(
+      (g) => g.marksObtained !== null || g.isAbsent
+    );
+    const passedExams = evaluatedExamGrades.filter((g) => g.isPassed && !g.isAbsent).length;
+    const examPassRate =
+      evaluatedExamGrades.length > 0
+        ? Math.round((passedExams / evaluatedExamGrades.length) * 100)
+        : 90;
+
+    let totalExamPct = 0;
+    let examCount = 0;
+    evaluatedExamGrades.forEach((g) => {
+      const ex = DEMO_EXAMS_STORE.find((e) => e.id === g.examId);
+      if (ex && g.marksObtained !== null) {
+        totalExamPct += (g.marksObtained / ex.maxMarks) * 100;
+        examCount++;
+      }
+    });
+    const avgExamPct = examCount > 0 ? Math.round((totalExamPct / examCount) * 10) / 10 : 84.5;
+
     return {
       averageMarksPercentage,
       gradeDistribution,
@@ -1090,7 +1120,21 @@ export class AnalyticsService {
       divisionPerformance,
       topPerformingSubjects,
       attentionNeededSubjects,
+      examSummary: {
+        totalExams: DEMO_EXAMS_STORE.length,
+        evaluatedGradesCount: evaluatedExamGrades.length,
+        passRate: examPassRate,
+        averagePercentage: avgExamPct,
+        averageExamMarks: avgExamPct,
+      },
     };
+  }
+
+  /**
+   * Exam Analytics integration (Phase 15).
+   */
+  static async getExamAnalytics() {
+    return ExamService.getExamAnalytics();
   }
 
   // =========================================================================

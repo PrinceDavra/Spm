@@ -14,9 +14,13 @@ import {
   ArrowRight,
   BellRing,
   Award,
+  GraduationCap,
+  FileCheck,
 } from "lucide-react";
 import Link from "next/link";
 import { SmartFeedWidget } from "@/components/notifications/smart-feed-widget";
+import { ExamService } from "@/services/exam.service";
+import { ExamStatus } from "@prisma/client";
 
 export default async function AdminDashboardPage() {
   const user = await requireRole([Role.ADMIN]);
@@ -37,6 +41,11 @@ export default async function AdminDashboardPage() {
   const activeClubsCount = allClubs.filter((c) => c.status === "ACTIVE").length;
   const draftClubsCount = allClubs.filter((c) => c.status === "DRAFT").length;
   const totalClubMembers = allClubs.reduce((acc, c) => acc + (c.memberCount || 0), 0);
+
+  // Load examination lifecycle KPIs & upcoming exams
+  const examAnalytics = await ExamService.getExamAnalytics();
+  const allExams = await ExamService.getExams();
+  const upcomingAdminExams = allExams.filter((e) => e.status === ExamStatus.SCHEDULED).slice(0, 3);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -148,6 +157,86 @@ export default async function AdminDashboardPage() {
             Edge Guard &bull; Server Token Verified
           </div>
         </div>
+      </div>
+
+      {/* Examination Lifecycle & Results Oversight Section */}
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="h-9 w-9 rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-400 flex items-center justify-center">
+              <GraduationCap className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-foreground">
+                Examination Lifecycle &amp; Grade Oversight
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Conflict checking, faculty gradebook tracking, result publication authorization &amp; audit trails
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/admin/exams"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition shadow-sm self-start sm:self-auto"
+          >
+            Manage All Exams &amp; Results
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="p-3.5 rounded-xl border border-border bg-muted/30">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Papers</span>
+            <div className="mt-1 text-2xl font-extrabold text-foreground">{examAnalytics.totalExams}</div>
+            <div className="text-[11px] text-muted-foreground">Curriculum active</div>
+          </div>
+          <div className="p-3.5 rounded-xl border border-border bg-muted/30">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Scheduled</span>
+            <div className="mt-1 text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">{examAnalytics.scheduledExams}</div>
+            <div className="text-[11px] text-muted-foreground">Upcoming calendar</div>
+          </div>
+          <div className="p-3.5 rounded-xl border border-border bg-muted/30">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Pending Grades</span>
+            <div className="mt-1 text-2xl font-extrabold text-amber-600 dark:text-amber-400">{examAnalytics.completedExams}</div>
+            <div className="text-[11px] text-muted-foreground">Awaiting submission</div>
+          </div>
+          <div className="p-3.5 rounded-xl border border-border bg-muted/30">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Published</span>
+            <div className="mt-1 text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">{examAnalytics.publishedExams}</div>
+            <div className="text-[11px] text-muted-foreground">Student visible</div>
+          </div>
+          <div className="p-3.5 rounded-xl border border-border bg-muted/30">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Pass Rate</span>
+            <div className="mt-1 text-2xl font-extrabold text-foreground">{examAnalytics.passRate}%</div>
+            <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">Standard 10-point scale</div>
+          </div>
+        </div>
+
+        {upcomingAdminExams.length > 0 && (
+          <div className="pt-2">
+            <div className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+              <CalendarDays className="h-3.5 w-3.5 text-primary" />
+              <span>Next Scheduled Examination Sessions</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {upcomingAdminExams.map((exam) => (
+                <div key={exam.id} className="p-3 rounded-xl border border-border bg-muted/20 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1">
+                      <span className="font-mono font-bold text-primary">{exam.subjectCode}</span>
+                      <span>{exam.date}</span>
+                    </div>
+                    <div className="text-xs font-bold text-foreground line-clamp-1">{exam.title}</div>
+                  </div>
+                  <div className="mt-2 text-[11px] text-muted-foreground flex items-center justify-between border-t border-border/40 pt-1.5">
+                    <span>Room {exam.roomNumber || "301"}</span>
+                    <span>{exam.startTime} – {exam.endTime}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Notice Center Overview Section */}

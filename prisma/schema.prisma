@@ -123,6 +123,7 @@ enum NotificationType {
   ACADEMIC
   PROFILE
   ADMIN
+  EXAMINATION
 }
 
 enum NotificationPriority {
@@ -353,6 +354,34 @@ enum ClaimStatus {
   COMPLETED
 }
 
+enum ExamType {
+  INTERNAL
+  MIDTERM
+  PRACTICAL
+  VIVA
+  END_SEMESTER
+  OTHER
+}
+
+enum ExamStatus {
+  DRAFT
+  SCHEDULED
+  ONGOING
+  COMPLETED
+  RESULTS_PENDING
+  PUBLISHED
+  LOCKED
+  ARCHIVED
+}
+
+enum RevaluationStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
 // -------------------------------------------------------------
 // CORE AUTHENTICATION & USERS
 // -------------------------------------------------------------
@@ -417,6 +446,7 @@ model Department {
   programs         Program[]
   laboratories     Laboratory[]
   rooms            Room[]
+  exams            Exam[]
 }
 
 model Program {
@@ -435,6 +465,7 @@ model Program {
   batches        Batch[]
   classes        Class[]
   subjects       Subject[]
+  exams          Exam[]
 
   @@index([code])
   @@index([departmentId])
@@ -453,6 +484,7 @@ model Batch {
 
   program         Program      @relation(fields: [programId], references: [id], onDelete: Cascade)
   classes         Class[]
+  exams           Exam[]
 
   @@unique([programId, name])
   @@index([programId])
@@ -509,6 +541,7 @@ model Division {
   timetables      Timetable[]
   attendances     Attendance[]
   notices         Notice[]
+  exams           Exam[]
 
   @@unique([classId, name])
 }
@@ -536,6 +569,8 @@ model Subject {
   laboratory      Laboratory?      @relation(fields: [laboratoryId], references: [id], onDelete: SetNull)
   facultySubjects FacultySubject[]
   timetableSlots  TimetableSlot[]
+  exams           Exam[]
+  revaluations    RevaluationRequest[]
 
   @@index([code])
 }
@@ -579,6 +614,7 @@ model Room {
   laboratories   Laboratory[]
   timetableSlots TimetableSlot[]
   events         Event[]
+  exams          Exam[]
 
   @@index([roomNumber])
 }
@@ -633,6 +669,10 @@ model Student {
   clubMemberships    ClubMembership[]
   jobApplications    PlacementApplication[]
   quizAttempts       QuizAttempt[]
+  examEnrollments    ExamEnrollment[]
+  gradebookEntries   GradebookEntry[]
+  examResults        ExamResult[]
+  revaluations       RevaluationRequest[]
 
   @@index([rollNumber])
   @@index([prnNumber])
@@ -654,6 +694,7 @@ model Faculty {
   department     Department       @relation(fields: [departmentId], references: [id], onDelete: Restrict)
   facultySubjects FacultySubject[]
   clubsMentored  Club[]
+  examsInvigilated Exam[]
 
   @@index([employeeId])
 }
@@ -1436,4 +1477,135 @@ model SystemSetting {
   value       String
   description String?
   updatedAt   DateTime @updatedAt
+}
+
+// -------------------------------------------------------------
+// EXAMINATION & RESULTS
+// -------------------------------------------------------------
+
+model Exam {
+  id              String           @id @default(uuid())
+  title           String
+  examType        ExamType         @default(INTERNAL)
+  academicYear    String           // e.g. "2024-2025"
+  semesterNumber  Int
+  departmentId    String
+  programId       String?
+  batchId         String?
+  divisionId      String?
+  subjectId       String
+  date            DateTime         @db.Date
+  startTime       String           // e.g. "10:00"
+  endTime         String           // e.g. "13:00"
+  roomId          String?
+  facultyId       String?          // Assigned invigilator
+  maxMarks        Float            @default(100)
+  passingMarks    Float            @default(40)
+  instructions    String?
+  status          ExamStatus       @default(DRAFT)
+  createdBy       String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  department      Department       @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  program         Program?         @relation(fields: [programId], references: [id], onDelete: SetNull)
+  batch           Batch?           @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  division        Division?        @relation(fields: [divisionId], references: [id], onDelete: SetNull)
+  subject         Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  room            Room?            @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  faculty         Faculty?         @relation(fields: [facultyId], references: [id], onDelete: SetNull)
+
+  enrollments      ExamEnrollment[]
+  gradebookEntries GradebookEntry[]
+  revaluations     RevaluationRequest[]
+
+  @@index([subjectId])
+  @@index([departmentId, semesterNumber])
+  @@index([date, status])
+}
+
+model ExamEnrollment {
+  id                  String    @id @default(uuid())
+  examId              String
+  studentId           String
+  isEligible          Boolean   @default(true)
+  ineligibilityReason String?
+  hallTicketNumber    String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  exam                Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
+  student             Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, studentId])
+  @@index([studentId])
+}
+
+model GradebookEntry {
+  id            String    @id @default(uuid())
+  examId        String
+  studentId     String
+  marksObtained Float?
+  isAbsent      Boolean   @default(false)
+  gradeLetter   String?   // "A+", "A", "B+", "B", "C", "D", "F"
+  gradePoint    Float?    // 10.0, 9.0, 8.0, 7.0, 6.0, 5.0, 0.0
+  isPassed      Boolean   @default(false)
+  remarks       String?
+  gradedBy      String?
+  gradedAt      DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  exam          Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
+  student       Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, studentId])
+  @@index([studentId])
+}
+
+model ExamResult {
+  id                    String    @id @default(uuid())
+  studentId             String
+  academicYear          String
+  semesterNumber        Int
+  gpa                   Float     @default(0.0)
+  totalCreditsAttempted Int       @default(0)
+  totalCreditsEarned    Int       @default(0)
+  status                String    @default("PUBLISHED") // PUBLISHED, LOCKED
+  publishedAt           DateTime  @default(now())
+  publishedBy           String?
+  lockedAt              DateTime?
+  lockedBy              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  student               Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, academicYear, semesterNumber])
+  @@index([studentId])
+}
+
+model RevaluationRequest {
+  id              String            @id @default(uuid())
+  examId          String
+  studentId       String
+  subjectId       String
+  reason          String
+  currentMarks    Float
+  requestedMarks  Float?
+  reviewedMarks   Float?
+  status          RevaluationStatus @default(PENDING)
+  reviewerRemarks String?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  exam            Exam              @relation(fields: [examId], references: [id], onDelete: Cascade)
+  student         Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject         Subject           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([examId])
+  @@index([status])
 }

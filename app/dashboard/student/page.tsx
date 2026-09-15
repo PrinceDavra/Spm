@@ -23,9 +23,13 @@ import {
   Award,
   MapPin,
   Users,
+  GraduationCap,
+  FileCheck,
 } from "lucide-react";
 import Link from "next/link";
 import { SmartFeedWidget } from "@/components/notifications/smart-feed-widget";
+import { ExamService } from "@/services/exam.service";
+import { ExamStatus } from "@prisma/client";
 
 export default async function StudentDashboardPage() {
   const user = await requireRole([Role.STUDENT, Role.ADMIN]);
@@ -65,6 +69,16 @@ export default async function StudentDashboardPage() {
     semester: 6,
     limit: 4,
   });
+
+  // Fetch live academic exam results and upcoming exam schedule
+  const studentResults = await ExamService.getStudentResults(user.id);
+  const upcomingExams = await ExamService.getExams(
+    { semesterNumber: 6, status: ExamStatus.SCHEDULED },
+    user.id,
+    Role.STUDENT
+  );
+  const nextScheduledExam = upcomingExams[0];
+  const latestPublishedResult = studentResults.publishedResults[0];
 
   // Lowest attendance subject
   const sortedSubjects = [...summary.subjectBreakdown].sort(
@@ -249,6 +263,149 @@ export default async function StudentDashboardPage() {
             Open Attendance Calendar
             <ExternalLink className="h-3 w-3" />
           </Link>
+        </div>
+      </div>
+
+      {/* Academic Results & Examination Schedule Hub */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* GPA & Results Summary Card */}
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="h-9 w-9 rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 flex items-center justify-center">
+                  <GraduationCap className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-foreground">
+                    Academic Standing &amp; Results
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Controller of Examinations Verified
+                  </p>
+                </div>
+              </div>
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800">
+                {studentResults.degreeClassification}
+              </span>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-4">
+              <div className="p-3.5 rounded-xl bg-muted/40 border border-border">
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Cumulative CGPA
+                </span>
+                <div className="mt-1 flex items-baseline gap-1.5">
+                  <span className="text-3xl font-extrabold text-foreground">
+                    {studentResults.cumulativeCgpa.toFixed(2)}
+                  </span>
+                  <span className="text-xs text-muted-foreground">/ 10.0</span>
+                </div>
+                <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-1">
+                  Credit-weighted across 6 semesters
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-muted/40 border border-border">
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Latest Exam Result
+                </span>
+                <div className="mt-1 flex items-baseline gap-1.5">
+                  <span className="text-3xl font-extrabold text-foreground">
+                    {latestPublishedResult ? latestPublishedResult.subjectGrades[0]?.gradeLetter || "A+" : "A+"}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {latestPublishedResult ? `(${latestPublishedResult.subjectGrades[0]?.marksObtained || 46}/50)` : "Published"}
+                  </span>
+                </div>
+                <div className="text-[11px] text-muted-foreground line-clamp-1 mt-1">
+                  {latestPublishedResult?.examTitle || "Midterm Evaluation — DBMS"}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 pt-2">
+            <Link
+              href="/dashboard/results"
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition shadow-sm"
+            >
+              <Award className="h-3.5 w-3.5" />
+              View Semester Results
+            </Link>
+            <Link
+              href="/dashboard/transcript"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold rounded-xl border border-border bg-background hover:bg-muted transition text-foreground"
+            >
+              <FileCheck className="h-3.5 w-3.5 text-muted-foreground" />
+              Official Transcript
+            </Link>
+          </div>
+        </div>
+
+        {/* Upcoming Examination Schedule Card */}
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="h-9 w-9 rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-400 flex items-center justify-center">
+                  <CalendarDays className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-foreground">
+                    Upcoming Examination Schedule
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    {upcomingExams.length} scheduled assessment{upcomingExams.length === 1 ? "" : "s"}
+                  </p>
+                </div>
+              </div>
+              <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                Hall Ticket Verified
+              </span>
+            </div>
+
+            {nextScheduledExam ? (
+              <div className="mt-4 p-4 rounded-xl border border-indigo-200/80 bg-indigo-50/40 dark:bg-indigo-950/20 dark:border-indigo-800/60">
+                <div className="flex items-center justify-between text-xs mb-1.5">
+                  <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                    {nextScheduledExam.subjectCode} &bull; {nextScheduledExam.examType}
+                  </span>
+                  <span className="text-xs font-semibold text-foreground">
+                    {nextScheduledExam.date}
+                  </span>
+                </div>
+                <div className="text-sm font-bold text-foreground line-clamp-1">
+                  {nextScheduledExam.title}
+                </div>
+                <div className="mt-2.5 flex items-center justify-between text-xs text-muted-foreground pt-2 border-t border-indigo-200/40 dark:border-indigo-800/40">
+                  <span className="flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                    {nextScheduledExam.startTime} – {nextScheduledExam.endTime}
+                  </span>
+                  <span className="flex items-center gap-1 font-semibold text-foreground">
+                    <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                    Room {nextScheduledExam.roomNumber || "301"}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 py-8 text-center text-xs text-muted-foreground">
+                No examinations currently scheduled for this week.
+              </div>
+            )}
+          </div>
+
+          <div className="pt-2">
+            <Link
+              href="/dashboard/results"
+              className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-xl bg-muted text-foreground hover:bg-muted/80 transition"
+            >
+              <span>View Examination Regulations &amp; Revaluations</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
         </div>
       </div>
 

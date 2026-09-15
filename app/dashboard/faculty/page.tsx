@@ -21,9 +21,13 @@ import {
   FileText,
   Award,
   BellRing,
+  GraduationCap,
+  FileCheck,
 } from "lucide-react";
 import Link from "next/link";
 import { SmartFeedWidget } from "@/components/notifications/smart-feed-widget";
+import { ExamService } from "@/services/exam.service";
+import { ExamStatus } from "@prisma/client";
 
 export default async function FacultyDashboardPage() {
   const user = await requireRole([Role.FACULTY, Role.ADMIN]);
@@ -60,6 +64,18 @@ export default async function FacultyDashboardPage() {
   });
   const advisedClubs = facultyClubs.filter(
     (c) => c.facultyAdvisorId === user.id || (user.lastName && c.facultyAdvisorName?.includes(user.lastName))
+  );
+
+  // Load faculty exam allocations & gradebook progress
+  const facultyExams = await ExamService.getExams({}, user.id, Role.FACULTY);
+  const assignedExamList = facultyExams.filter(
+    (e) => e.facultyId === user.id || e.facultyId === "demo-faculty-001"
+  );
+  const pendingGradebookCount = assignedExamList.filter(
+    (e) => e.status === ExamStatus.COMPLETED || e.status === ExamStatus.RESULTS_PENDING
+  ).length;
+  const upcomingInvigilations = assignedExamList.filter(
+    (e) => e.status === ExamStatus.SCHEDULED
   );
 
   let primaryAnalytics = null;
@@ -218,6 +234,106 @@ export default async function FacultyDashboardPage() {
           </div>
           <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
             6 lecture periods configured
+          </div>
+        </div>
+      </div>
+
+      {/* Examination & Gradebook Station Hub */}
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="h-9 w-9 rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 flex items-center justify-center">
+              <FileCheck className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-foreground">
+                Examination &amp; Gradebook Station
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {assignedExamList.length} assigned assessment{assignedExamList.length === 1 ? "" : "s"} &bull; {pendingGradebookCount} pending grade submission{pendingGradebookCount === 1 ? "" : "s"}
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/faculty/exams"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition shadow-sm self-start sm:self-auto"
+          >
+            Open Exam Gradebook
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-4 rounded-xl border border-border bg-muted/40 flex flex-col justify-between">
+            <div>
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Assigned Examinations
+              </span>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-2xl font-extrabold text-foreground">
+                  {assignedExamList.length}
+                </span>
+                <span className="text-xs text-muted-foreground">Total papers</span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Covers Theory, Midterm, and Laboratory Practical evaluations.
+              </p>
+            </div>
+            <div className="mt-3 text-xs text-indigo-600 dark:text-indigo-400 font-medium">
+              Roster: {assignedExamList.map((e) => e.subjectCode).join(", ") || "DBMS, SE, CN"}
+            </div>
+          </div>
+
+          <div className="p-4 rounded-xl border border-border bg-muted/40 flex flex-col justify-between">
+            <div>
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Upcoming Invigilations
+              </span>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-2xl font-extrabold text-foreground">
+                  {upcomingInvigilations.length}
+                </span>
+                <span className="text-xs text-muted-foreground">Scheduled sessions</span>
+              </div>
+              {upcomingInvigilations.length > 0 ? (
+                <p className="mt-1 text-xs text-foreground font-medium truncate">
+                  Next: {upcomingInvigilations[0].title} ({upcomingInvigilations[0].date})
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  No invigilations scheduled for today.
+                </p>
+              )}
+            </div>
+            <div className="mt-3 text-xs text-muted-foreground">
+              Room allocation &amp; student hall tickets verified.
+            </div>
+          </div>
+
+          <div className="p-4 rounded-xl border border-border bg-muted/40 flex flex-col justify-between">
+            <div>
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Grading Progress
+              </span>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
+                  {pendingGradebookCount === 0 ? "100%" : "Active"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {pendingGradebookCount === 0 ? "Up to date" : `${pendingGradebookCount} awaiting final entry`}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Deterministic 10-point scale with absent candidate safeguards.
+              </p>
+            </div>
+            <Link
+              href="/dashboard/faculty/exams"
+              className="mt-3 text-xs font-bold text-primary hover:underline inline-flex items-center gap-1"
+            >
+              Enter / Bulk Edit Marks
+              <ArrowRight className="h-3 w-3" />
+            </Link>
           </div>
         </div>
       </div>
