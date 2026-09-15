@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Menu, LogOut, Bell, Shield, User, Loader2 } from "lucide-react";
+import { Menu, LogOut, Shield, User, Loader2 } from "lucide-react";
 import { SessionUser } from "@/lib/auth/session";
+import { NotificationBell } from "./notification-bell";
 
 export function DashboardHeader({
   user,
@@ -58,15 +59,8 @@ export function DashboardHeader({
           <span>Server Verified: {user.role}</span>
         </div>
 
-        {/* Notifications Icon (Visual placeholder ready for Phase 7) */}
-        <button
-          type="button"
-          className="relative p-2 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-          title="Notifications"
-        >
-          <Bell className="h-4 w-4" />
-          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-indigo-600" />
-        </button>
+        {/* Interactive Notifications Bell */}
+        <NotificationBell />
 
         {/* User Account Dropdown */}
         <div className="relative">

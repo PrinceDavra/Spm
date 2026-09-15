@@ -25,6 +25,7 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
+import { SmartFeedWidget } from "@/components/notifications/smart-feed-widget";
 
 export default async function StudentDashboardPage() {
   const user = await requireRole([Role.STUDENT, Role.ADMIN]);
@@ -104,6 +105,9 @@ export default async function StudentDashboardPage() {
         </div>
         <div className="absolute right-0 bottom-0 translate-x-8 translate-y-8 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
       </div>
+
+      {/* Smart Information Feed */}
+      <SmartFeedWidget />
 
       {/* KPI Cards Grid — Backed by Real Database Logic */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

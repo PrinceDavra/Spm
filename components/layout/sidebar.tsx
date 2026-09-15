@@ -41,6 +41,7 @@ interface NavItem {
 const roleNavItems: Record<Role, NavItem[]> = {
   STUDENT: [
     { name: "Overview", href: "/dashboard/student", icon: LayoutDashboard },
+    { name: "Notification Hub", href: "/dashboard/notifications", icon: BellRing },
     { name: "Attendance & Risk", href: "/dashboard/student/attendance", icon: TrendingUp },
     { name: "Weekly Timetable", href: "/dashboard/student/timetable", icon: CalendarDays },
     { name: "Assignments", href: "/dashboard/student/assignments", icon: CheckCircle2 },
@@ -57,6 +58,7 @@ const roleNavItems: Record<Role, NavItem[]> = {
   ],
   FACULTY: [
     { name: "Overview", href: "/dashboard/faculty", icon: LayoutDashboard },
+    { name: "Notification Hub", href: "/dashboard/notifications", icon: BellRing },
     { name: "Mark Attendance", href: "/dashboard/faculty/attendance/mark", icon: ClipboardList },
     { name: "Attendance Logs", href: "/dashboard/faculty/attendance/history", icon: History },
     { name: "Teaching Schedule", href: "/dashboard/faculty/timetable", icon: CalendarDays },
@@ -70,6 +72,7 @@ const roleNavItems: Record<Role, NavItem[]> = {
   ],
   ADMIN: [
     { name: "Master Dashboard", href: "/dashboard/admin", icon: LayoutDashboard },
+    { name: "Notification Hub", href: "/dashboard/notifications", icon: BellRing },
     { name: "Academic Setup", href: "/dashboard/admin/academic", icon: Sparkles },
     { name: "Departments", href: "/dashboard/admin/departments", icon: Building2 },
     { name: "Programs & Batches", href: "/dashboard/admin/programs", icon: GraduationCap },
@@ -91,6 +94,7 @@ const roleNavItems: Record<Role, NavItem[]> = {
   ],
   PLACEMENT_OFFICER: [
     { name: "Placement Cell", href: "/dashboard/placement", icon: LayoutDashboard },
+    { name: "Notification Hub", href: "/dashboard/notifications", icon: BellRing },
     { name: "Recruiting Partners", href: "/dashboard/placement/companies", icon: Building2 },
     { name: "Placement Drives", href: "/dashboard/placement/drives", icon: Briefcase },
     { name: "Campus Events", href: "/dashboard/placement/events", icon: Award },
@@ -99,6 +103,7 @@ const roleNavItems: Record<Role, NavItem[]> = {
   ],
   CLUB_COORDINATOR: [
     { name: "Station Overview", href: "/dashboard/club", icon: LayoutDashboard },
+    { name: "Notification Hub", href: "/dashboard/notifications", icon: BellRing },
     { name: "Membership Roster", href: "/dashboard/club/members", icon: CheckCircle2 },
     { name: "Club Activities", href: "/dashboard/club/activities", icon: CalendarDays },
     { name: "Club Events", href: "/dashboard/club/events", icon: Award },

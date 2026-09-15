@@ -120,6 +120,22 @@ enum NotificationType {
   CLUB
   LOST_FOUND
   SYSTEM
+  ACADEMIC
+  PROFILE
+  ADMIN
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum PreferenceChannel {
+  IN_APP
+  EMAIL
+  DISABLED
 }
 
 enum EventStatus {
@@ -372,6 +388,7 @@ model User {
   createdDrives    PlacementDrive[]  @relation("CreatedDrives")
   createdQuizzes   Quiz[]            @relation("CreatedQuizzes")
   statusChanges    ApplicationStatusHistory[] @relation("StatusChanges")
+  notificationPreferences NotificationPreference[]
 
   @@index([email])
   @@index([role])
@@ -876,18 +893,43 @@ model NoticeRead {
 }
 
 model Notification {
-  id        String           @id @default(uuid())
-  userId    String
-  title     String
-  message   String
-  type      NotificationType @default(SYSTEM)
-  link      String?
-  isRead    Boolean          @default(false)
-  createdAt DateTime         @default(now())
+  id           String               @id @default(uuid())
+  userId       String
+  title        String
+  message      String
+  type         NotificationType     @default(SYSTEM)
+  priority     NotificationPriority @default(NORMAL)
+  link         String?
+  isRead       Boolean              @default(false)
+  readAt       DateTime?
+  sourceEntity String?
+  sourceId     String?
+  dedupKey     String?
+  groupKey     String?
+  metadata     String?
+  createdAt    DateTime             @default(now())
 
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@index([userId, type])
+  @@index([userId, priority])
+  @@index([dedupKey])
+}
+
+model NotificationPreference {
+  id        String            @id @default(uuid())
+  userId    String
+  category  NotificationType
+  channel   PreferenceChannel @default(IN_APP)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category])
+  @@index([userId])
 }
 
 // -------------------------------------------------------------

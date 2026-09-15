@@ -23,6 +23,7 @@ import {
   BellRing,
 } from "lucide-react";
 import Link from "next/link";
+import { SmartFeedWidget } from "@/components/notifications/smart-feed-widget";
 
 export default async function FacultyDashboardPage() {
   const user = await requireRole([Role.FACULTY, Role.ADMIN]);
@@ -98,6 +99,9 @@ export default async function FacultyDashboardPage() {
         </div>
         <div className="absolute right-0 bottom-0 translate-x-8 translate-y-8 w-64 h-64 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none" />
       </div>
+
+      {/* Smart Information Feed */}
+      <SmartFeedWidget />
 
       {/* Quick Action Banner */}
       <div className="bg-card border border-border rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">

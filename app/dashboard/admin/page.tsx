@@ -16,6 +16,7 @@ import {
   Award,
 } from "lucide-react";
 import Link from "next/link";
+import { SmartFeedWidget } from "@/components/notifications/smart-feed-widget";
 
 export default async function AdminDashboardPage() {
   const user = await requireRole([Role.ADMIN]);
@@ -56,6 +57,9 @@ export default async function AdminDashboardPage() {
         </div>
         <div className="absolute right-0 bottom-0 translate-x-8 translate-y-8 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl pointer-events-none" />
       </div>
+
+      {/* Smart Information Feed */}
+      <SmartFeedWidget />
 
       {/* Institutional Metrics Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

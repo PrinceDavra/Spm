@@ -2636,6 +2636,220 @@ async function runTests() {
   });
   assert(am_auditRes.status === 200, "AM35: Admin academic operations verified and functioning (HTTP 200)");
 
+  // =========================================================================
+  // PHASE 13 — CAMPUS COMMUNICATION, NOTIFICATIONS & SMART HUB TESTS
+  // =========================================================================
+  console.log("\n--- Phase 13: Campus Communication, Notifications & Smart Information Hub Tests ---");
+
+  // Step NC1: Unauthenticated request to /api/notifications rejected (HTTP 401)
+  const nc_unauthRes = await fetch(`${BASE_URL}/api/notifications`);
+  assert(nc_unauthRes.status === 401, "NC1: Unauthenticated user blocked from notifications (HTTP 401)");
+
+  // Step NC2: Authenticated student fetches notifications (HTTP 200)
+  const nc_studentNotifsRes = await fetch(`${BASE_URL}/api/notifications`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(nc_studentNotifsRes.status === 200, "NC2: Authenticated student fetches notifications (HTTP 200)");
+  const nc_studentNotifsData = await nc_studentNotifsRes.json();
+  assert(Array.isArray(nc_studentNotifsData.notifications), "NC2b: Notifications returned as an array");
+  const nc_sampleNotif = nc_studentNotifsData.notifications?.[0];
+  const nc_sampleNotifId = nc_sampleNotif?.id;
+
+  // Step NC3: Fast unread count lookup (HTTP 200)
+  const nc_unreadCountRes = await fetch(`${BASE_URL}/api/notifications/unread-count`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(nc_unreadCountRes.status === 200, "NC3: Unread count endpoint returns HTTP 200");
+  const nc_unreadCountData = await nc_unreadCountRes.json();
+  assert(typeof nc_unreadCountData.unreadCount === "number", "NC3b: Unread count returned as number");
+
+  // Step NC4: Student marks a single notification as read (HTTP 200)
+  if (nc_sampleNotifId) {
+    const nc_markReadRes = await fetch(`${BASE_URL}/api/notifications/${nc_sampleNotifId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Cookie: studentCookie },
+      body: JSON.stringify({ isRead: true }),
+    });
+    assert(nc_markReadRes.status === 200, "NC4: Student marks single notification read (HTTP 200)");
+    const nc_markReadData = await nc_markReadRes.json();
+    assert(nc_markReadData.notification?.isRead === true, "NC4b: Marked notification isRead is true");
+
+    // Step NC5: Student marks notification back to unread (HTTP 200)
+    const nc_markUnreadRes = await fetch(`${BASE_URL}/api/notifications/${nc_sampleNotifId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Cookie: studentCookie },
+      body: JSON.stringify({ isRead: false }),
+    });
+    assert(nc_markUnreadRes.status === 200, "NC5: Student marks notification as unread (HTTP 200)");
+    const nc_markUnreadData = await nc_markUnreadRes.json();
+    assert(nc_markUnreadData.notification?.isRead === false, "NC5b: Marked notification isRead is false");
+  }
+
+  // Step NC6: Cross-user IDOR protection — student modifying faculty notification rejected (HTTP 403 or 404)
+  const nc_facultyNotifsRes = await fetch(`${BASE_URL}/api/notifications`, {
+    headers: { Cookie: facultyCookie },
+  });
+  const nc_facultyNotifsData = await nc_facultyNotifsRes.json();
+  const nc_facultyNotifId = nc_facultyNotifsData.notifications?.[0]?.id;
+
+  if (nc_facultyNotifId) {
+    const nc_crossUserRes = await fetch(`${BASE_URL}/api/notifications/${nc_facultyNotifId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Cookie: studentCookie },
+      body: JSON.stringify({ isRead: true }),
+    });
+    assert(
+      [403, 404].includes(nc_crossUserRes.status),
+      "NC6: Cross-user unauthorized notification mutation blocked (HTTP 403/404)"
+    );
+  }
+
+  // Step NC7: Category filtering works
+  const nc_filterRes = await fetch(`${BASE_URL}/api/notifications?type=ASSIGNMENT`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(nc_filterRes.status === 200, "NC7: Category filtering returns HTTP 200");
+  const nc_filterData = await nc_filterRes.json();
+  assert(
+    nc_filterData.notifications?.every((n) => n.type === "ASSIGNMENT"),
+    "NC7b: All filtered notifications match requested type"
+  );
+
+  // Step NC8: Priority filtering works
+  const nc_priorityRes = await fetch(`${BASE_URL}/api/notifications?priority=HIGH`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(nc_priorityRes.status === 200, "NC8: Priority filtering returns HTTP 200");
+
+  // Step NC9: Search notifications by keyword
+  const nc_searchRes = await fetch(`${BASE_URL}/api/notifications?search=Assignment`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(nc_searchRes.status === 200, "NC9: Notification search returns HTTP 200");
+
+  // Step NC10: Pagination limit
+  const nc_pageRes = await fetch(`${BASE_URL}/api/notifications?limit=2&offset=0`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(nc_pageRes.status === 200, "NC10: Notification pagination returns HTTP 200");
+  const nc_pageData = await nc_pageRes.json();
+  assert(nc_pageData.notifications?.length <= 2, "NC10b: Pagination strictly limits returned items");
+
+  // Step NC11: Mark all notifications as read
+  const nc_markAllRes = await fetch(`${BASE_URL}/api/notifications/mark-all-read`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+  });
+  assert(nc_markAllRes.status === 200, "NC11: Student marks all notifications read (HTTP 200)");
+  const nc_unreadAfterRes = await fetch(`${BASE_URL}/api/notifications/unread-count`, {
+    headers: { Cookie: studentCookie },
+  });
+  const nc_unreadAfterData = await nc_unreadAfterRes.json();
+  assert(nc_unreadAfterData.unreadCount === 0, "NC11b: Unread count is 0 after mark-all-read");
+
+  // Step NC12: Retrieve notification preferences (HTTP 200)
+  const nc_getPrefsRes = await fetch(`${BASE_URL}/api/notifications/preferences`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(nc_getPrefsRes.status === 200, "NC12: Student queries notification preferences (HTTP 200)");
+  const nc_prefsData = await nc_getPrefsRes.json();
+  assert(Array.isArray(nc_prefsData.preferences), "NC12b: Preferences returned as array");
+
+  // Step NC13: Update non-critical notification preference (HTTP 200)
+  const nc_updatePrefsRes = await fetch(`${BASE_URL}/api/notifications/preferences`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({
+      preferences: [{ category: "CLUB", channel: "DISABLED" }],
+    }),
+  });
+  assert(nc_updatePrefsRes.status === 200, "NC13: Student updates non-critical category preference (HTTP 200)");
+
+  // Step NC14: Attempt to disable critical SYSTEM category rejected (HTTP 400)
+  const nc_disableSystemRes = await fetch(`${BASE_URL}/api/notifications/preferences`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({
+      preferences: [{ category: "SYSTEM", channel: "DISABLED" }],
+    }),
+  });
+  assert(nc_disableSystemRes.status === 400, "NC14: Attempt to disable critical SYSTEM notifications rejected (HTTP 400)");
+
+  // Step NC15: Attempt to disable critical ACADEMIC category rejected (HTTP 400)
+  const nc_disableAcademicRes = await fetch(`${BASE_URL}/api/notifications/preferences`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({
+      preferences: [{ category: "ACADEMIC", channel: "DISABLED" }],
+    }),
+  });
+  assert(nc_disableAcademicRes.status === 400, "NC15: Attempt to disable critical ACADEMIC notifications rejected (HTTP 400)");
+
+  // Step NC16: Query unified smart information feed (HTTP 200)
+  const nc_smartFeedRes = await fetch(`${BASE_URL}/api/notifications/smart-feed`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(nc_smartFeedRes.status === 200, "NC16: Student queries smart information feed (HTTP 200)");
+  const nc_smartFeedData = await nc_smartFeedRes.json();
+  assert(Array.isArray(nc_smartFeedData.items), "NC16b: Smart feed contains items array");
+  assert(typeof nc_smartFeedData.lastUpdated === "string", "NC16c: Smart feed contains valid timestamp");
+
+  // Step NC17: Faculty queries smart information feed (HTTP 200)
+  const nc_facultyFeedRes = await fetch(`${BASE_URL}/api/notifications/smart-feed`, {
+    headers: { Cookie: facultyCookie },
+  });
+  assert(nc_facultyFeedRes.status === 200, "NC17: Faculty queries smart information feed (HTTP 200)");
+
+  // Step NC18: Admin queries smart information feed (HTTP 200)
+  const nc_adminFeedRes = await fetch(`${BASE_URL}/api/notifications/smart-feed`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(nc_adminFeedRes.status === 200, "NC18: Admin queries smart information feed (HTTP 200)");
+
+  // Step NC19: Student blocked from authoring announcements via /api/notices (HTTP 403)
+  const nc_studentNoticeRes = await fetch(`${BASE_URL}/api/notices`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({
+      title: "Unauthorized Student Broadcast",
+      content: "This must be rejected by RBAC.",
+      category: "GENERAL",
+      priority: "NORMAL",
+      audience: "ALL",
+    }),
+  });
+  assert(nc_studentNoticeRes.status === 403, "NC19: Student blocked from broadcasting announcements (HTTP 403)");
+
+  // Step NC20: Admin authors targeted campus announcement (HTTP 201)
+  const nc_adminNoticeRes = await fetch(`${BASE_URL}/api/notices`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      title: "Campus Hub Live Launch Notice",
+      content: "The unified campus communication and notification hub is officially operational.",
+      summary: "Communication hub is now active.",
+      category: "ADMINISTRATIVE",
+      priority: "IMPORTANT",
+      audience: "ALL",
+    }),
+  });
+  assert(nc_adminNoticeRes.status === 201, "NC20: Admin publishes targeted announcement (HTTP 201)");
+
+  // Step NC21: Dismiss / delete notification
+  if (nc_sampleNotifId) {
+    const nc_delRes = await fetch(`${BASE_URL}/api/notifications/${nc_sampleNotifId}`, {
+      method: "DELETE",
+      headers: { Cookie: studentCookie },
+    });
+    assert(nc_delRes.status === 200, "NC21: Student dismisses/deletes notification (HTTP 200)");
+  }
+
+  // Step NC22: Overall Phase 13 Notification Hub health check
+  const nc_healthCheckRes = await fetch(`${BASE_URL}/api/notifications?limit=5`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(nc_healthCheckRes.status === 200, "NC22: Notification hub operational and responsive (HTTP 200)");
+
   console.log("\n==================================================");
   console.log(`FINAL RESULT: ${passed} PASSED, ${failed} FAILED`);
   console.log("==================================================");
