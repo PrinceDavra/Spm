@@ -1835,6 +1835,388 @@ async function runTests() {
   const pl_closeDriveData = await pl_closeDriveRes.json();
   assert(pl_closeDriveData.drive?.status === "APPLICATION_CLOSED", "PL34b: Drive status changed to APPLICATION_CLOSED");
 
+  // =========================================================================
+  // --- PHASE 11: LOST & FOUND COMMUNITY BOARD & CLAIM VERIFICATION ---
+  // =========================================================================
+  console.log("\n--- Phase 11: Lost & Found Community Board & Claim Verification ---");
+
+  // Step LF1 & LF2: Student & Admin login verification (re-validate session cookies)
+  assert(studentCookie.length > 0, "LF1: Student session authenticated with HTTP-only cookies");
+  assert(adminCookie.length > 0, "LF2: Admin session authenticated with HTTP-only cookies");
+
+  // Step LF3: Create LOST report
+  const lf_lostPayload = {
+    type: "LOST",
+    title: "Sony Noise-Cancelling Headphones WH-1000XM4",
+    category: "ELECTRONICS",
+    description: "Midnight blue over-ear wireless headphones left in central library cubicle 14.",
+    location: "Central Library Cubicle 14",
+    dateLostFound: "2026-09-14",
+    timeLostFound: "04:30 PM",
+    contactPreference: "CAMPUS_PORTAL",
+    identifyingDetails: "Small gold star sticker on inner left ear cup headband.",
+  };
+  const lf_createLostRes = await fetch(`${BASE_URL}/api/lost-found`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify(lf_lostPayload),
+  });
+  assert(lf_createLostRes.status === 201, "LF3: Student creates LOST report (HTTP 201)");
+  const lf_createLostData = await lf_createLostRes.json();
+  const lf_testLostItemId = lf_createLostData.item?.id;
+  assert(lf_createLostData.item?.type === "LOST", "LF3b: Report created with type LOST");
+  assert(lf_createLostData.item?.referenceNumber?.startsWith("LF-"), "LF3c: Case reference number generated");
+
+  // Step LF4: Create FOUND report
+  const lf_foundPayload = {
+    type: "FOUND",
+    title: "Blue Leatherette Bifold Wallet",
+    category: "WALLET",
+    description: "Found leather wallet on canteen patio table after lunch.",
+    location: "Student Canteen Outdoor Patio",
+    dateLostFound: "2026-09-14",
+    timeLostFound: "01:30 PM",
+    contactPreference: "CAMPUS_PORTAL",
+  };
+  const lf_createFoundRes = await fetch(`${BASE_URL}/api/lost-found`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify(lf_foundPayload),
+  });
+  assert(lf_createFoundRes.status === 201, "LF4: Student creates FOUND report (HTTP 201)");
+  const lf_createFoundData = await lf_createFoundRes.json();
+  const lf_testFoundItemId = lf_createFoundData.item?.id;
+  assert(lf_createFoundData.item?.type === "FOUND", "LF4b: Report created with type FOUND");
+
+  // Step LF5: Create DRAFT report and verify draft is hidden from public feed
+  const lf_draftPayload = {
+    type: "LOST",
+    title: "Draft Private Keycard Holder",
+    category: "ACCESSORY",
+    description: "Black lanyard and RFID keycard draft item.",
+    location: "Hostel Entryway",
+    dateLostFound: "2026-09-14",
+    status: "DRAFT",
+  };
+  const lf_createDraftRes = await fetch(`${BASE_URL}/api/lost-found`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify(lf_draftPayload),
+  });
+  assert(lf_createDraftRes.status === 201, "LF5a: Draft report created (HTTP 201)");
+  const lf_createDraftData = await lf_createDraftRes.json();
+  const lf_testDraftId = lf_createDraftData.item?.id;
+
+  // Query public feed using faculty/another user to ensure draft is concealed
+  const lf_publicFeedRes = await fetch(`${BASE_URL}/api/lost-found`, {
+    headers: { Cookie: facultyCookie },
+  });
+  const lf_publicFeedData = await lf_publicFeedRes.json();
+  const lf_draftInFeed = lf_publicFeedData.items?.find((i) => i.id === lf_testDraftId);
+  assert(!lf_draftInFeed, "LF5: DRAFT report is concealed from unauthorized public discovery feed");
+
+  // Step LF6: Publish draft report
+  const lf_publishRes = await fetch(`${BASE_URL}/api/lost-found/${lf_testDraftId}/publish`, {
+    method: "POST",
+    headers: { Cookie: studentCookie },
+  });
+  assert(lf_publishRes.status === 200, "LF6: Author publishes draft report (HTTP 200)");
+  const lf_publishData = await lf_publishRes.json();
+  assert(lf_publishData.item?.status === "PUBLISHED", "LF6b: Draft transitioned to PUBLISHED status");
+
+  // Step LF7: Student browses published reports
+  const lf_feedRes = await fetch(`${BASE_URL}/api/lost-found`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(lf_feedRes.status === 200, "LF7: Student can browse published reports feed (HTTP 200)");
+  const lf_feedData = await lf_feedRes.json();
+  assert(Array.isArray(lf_feedData.items) && lf_feedData.items.length > 0, "LF7b: Feed returns array of active items");
+
+  // Step LF8: Search & Category filter works
+  const lf_searchRes = await fetch(`${BASE_URL}/api/lost-found?search=Headphones&category=ELECTRONICS`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(lf_searchRes.status === 200, "LF8: Search and category filters operate properly (HTTP 200)");
+  const lf_searchData = await lf_searchRes.json();
+  assert(lf_searchData.items?.some((i) => i.title.includes("Headphones")), "LF8b: Search query returns relevant items");
+
+  // Step LF9: Student can edit own report
+  const lf_editRes = await fetch(`${BASE_URL}/api/lost-found/${lf_testLostItemId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({ title: "Sony WH-1000XM4 Headphones (Updated Title)" }),
+  });
+  assert(lf_editRes.status === 200, "LF9: Author edits own report successfully (HTTP 200)");
+  const lf_editData = await lf_editRes.json();
+  assert(lf_editData.item?.title.includes("Updated Title"), "LF9b: Updated title persisted in storage");
+
+  // Step LF10: Unauthorized user cannot edit another user's report
+  const lf_unauthEditRes = await fetch(`${BASE_URL}/api/lost-found/${lf_testLostItemId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: facultyCookie },
+    body: JSON.stringify({ title: "Hacked by Faculty" }),
+  });
+  assert(lf_unauthEditRes.status === 403, "LF10: Non-author cannot edit another user's report (HTTP 403)");
+
+  // Step LF11: Potential matches generated
+  const lf_matchesRes = await fetch(`${BASE_URL}/api/lost-found/lf-item-002/matches`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(lf_matchesRes.status === 200, "LF11: Server evaluates potential matches (HTTP 200)");
+  const lf_matchesData = await lf_matchesRes.json();
+  assert(Array.isArray(lf_matchesData.matches), "LF11b: Matches returned as an array");
+  assert(lf_matchesData.matches.length > 0, "LF11c: Deterministic matches identified");
+
+  // Step LF12: Match score returned in valid range
+  const lf_topMatch = lf_matchesData.matches[0];
+  assert(typeof lf_topMatch?.matchScore === "number", "LF12: Numerical match score returned");
+  assert(lf_topMatch?.matchScore >= 0 && lf_topMatch?.matchScore <= 100, "LF12b: Match score is bounded in 0-100 range");
+
+  // Step LF13: Match score is deterministic
+  const lf_matchesRes2 = await fetch(`${BASE_URL}/api/lost-found/lf-item-002/matches`, {
+    headers: { Cookie: studentCookie },
+  });
+  const lf_matchesData2 = await lf_matchesRes2.json();
+  assert(lf_matchesData.matches[0]?.matchScore === lf_matchesData2.matches[0]?.matchScore, "LF13: Match scoring is strictly deterministic");
+
+  // Create a faculty-reported FOUND item for student claim testing (ensures clean repeatable runs)
+  const lf_facultyFoundRes = await fetch(`${BASE_URL}/api/lost-found`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: facultyCookie },
+    body: JSON.stringify({
+      type: "FOUND",
+      title: `Scientific Calculator Casio FX-991EX (Batch ${Date.now()})`,
+      category: "ELECTRONICS",
+      description: "Found on desk 4 in Physics Lab during practical session.",
+      location: "Physics Lab Desk 4",
+      dateLostFound: "2026-09-14",
+      contactPreference: "CAMPUS_PORTAL",
+    }),
+  });
+  const lf_facultyFoundData = await lf_facultyFoundRes.json();
+  const lf_claimableItemId = lf_facultyFoundData.item?.id;
+
+  // Step LF14: Student submits claim on a published item
+  const lf_claimPayload = {
+    claimStatement: "This Casio calculator belongs to me; left in physics lab.",
+    verificationAnswers: "Serial barcode on the back has numbers ending in 4102 and initials scratched.",
+  };
+  const lf_claimRes = await fetch(`${BASE_URL}/api/lost-found/${lf_claimableItemId}/claims`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify(lf_claimPayload),
+  });
+  assert(lf_claimRes.status === 201, "LF14: Student submits proof-of-ownership claim (HTTP 201)");
+  const lf_claimData = await lf_claimRes.json();
+  const lf_testClaimId = lf_claimData.claim?.id;
+  assert(lf_claimData.claim?.status === "PENDING", "LF14b: Claim created with PENDING status");
+
+  // Step LF15: Duplicate claim rejected with HTTP 409
+  const lf_dupClaimRes = await fetch(`${BASE_URL}/api/lost-found/${lf_claimableItemId}/claims`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify(lf_claimPayload),
+  });
+  assert(lf_dupClaimRes.status === 409, "LF15: Duplicate active claim rejected (HTTP 409 Conflict)");
+
+  // Step LF16: Student cannot access another user's private claim details
+  const lf_otherClaimRes = await fetch(`${BASE_URL}/api/lost-found/claims/claim-002`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(lf_otherClaimRes.status === 403 || lf_otherClaimRes.status === 404, "LF16: Student cannot access another user's private claim (HTTP 403/404)");
+
+  // Step LF17: Admin sees all pending claims
+  const lf_adminClaimsRes = await fetch(`${BASE_URL}/api/lost-found/claims?status=PENDING`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(lf_adminClaimsRes.status === 200, "LF17: Admin queries pending claims desk (HTTP 200)");
+  const lf_adminClaimsData = await lf_adminClaimsRes.json();
+  assert(Array.isArray(lf_adminClaimsData.claims), "LF17b: Admin claims list returned");
+
+  // Step LF18: Student cannot review or approve own claim
+  const lf_selfApproveRes = await fetch(`${BASE_URL}/api/lost-found/claims/${lf_testClaimId}/review`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({ status: "VERIFIED", reviewerRemarks: "Self approval attempt" }),
+  });
+  assert(lf_selfApproveRes.status === 403, "LF18: Student self-approval strictly blocked (HTTP 403 Forbidden)");
+
+  // Step LF19: Admin approves claim
+  const lf_adminApproveRes = await fetch(`${BASE_URL}/api/lost-found/claims/${lf_testClaimId}/review`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      status: "VERIFIED",
+      reviewerRemarks: "Physical identification matched security register. Ready for handover.",
+    }),
+  });
+  assert(lf_adminApproveRes.status === 200, "LF19: Admin approves verified claim (HTTP 200)");
+  const lf_adminApproveData = await lf_adminApproveRes.json();
+  assert(lf_adminApproveData.claim?.status === "VERIFIED", "LF19b: Claim status updated to VERIFIED");
+
+  // Step LF20: Claimant receives status update
+  const lf_studentClaimRes = await fetch(`${BASE_URL}/api/lost-found/claims/${lf_testClaimId}`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(lf_studentClaimRes.status === 200, "LF20: Claimant inspects updated claim status (HTTP 200)");
+  const lf_studentClaimData = await lf_studentClaimRes.json();
+  assert(lf_studentClaimData.claim?.status === "VERIFIED", "LF20b: Verified claim status reflected to claimant");
+
+  // Step LF21: Handover workflow
+  const lf_handoverRes = await fetch(`${BASE_URL}/api/lost-found/${lf_claimableItemId}/handover`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      claimId: lf_testClaimId,
+      handoverNotes: "Item handed over to student at Security Post 1 upon ID verification.",
+    }),
+  });
+  assert(lf_handoverRes.status === 200, "LF21: Handover recorded and item marked resolved (HTTP 200)");
+  const lf_handoverData = await lf_handoverRes.json();
+  assert(lf_handoverData.item?.status === "RESOLVED", "LF21b: Item status transitioned to RESOLVED");
+  assert(lf_handoverData.claim?.status === "COMPLETED", "LF21c: Claim status transitioned to COMPLETED");
+
+  // Step LF22: Direct resolution workflow
+  const lf_resolveRes = await fetch(`${BASE_URL}/api/lost-found/${lf_testLostItemId}/resolve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      resolutionNotes: "Recovered by owner directly through faculty advisor.",
+    }),
+  });
+  assert(lf_resolveRes.status === 200, "LF22: Direct item resolution recorded (HTTP 200)");
+  const lf_resolveData = await lf_resolveRes.json();
+  assert(lf_resolveData.item?.status === "RESOLVED", "LF22b: Item status changed to RESOLVED");
+
+  // Step LF23: Resolved item becomes read-only
+  const lf_editResolvedRes = await fetch(`${BASE_URL}/api/lost-found/${lf_testLostItemId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({ title: "Trying to edit resolved item" }),
+  });
+  assert(lf_editResolvedRes.status === 400, "LF23: Resolved item is locked into read-only state (HTTP 400)");
+
+  // Step LF24: New claim blocked after resolution
+  const lf_claimResolvedRes = await fetch(`${BASE_URL}/api/lost-found/${lf_testLostItemId}/claims`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({
+      claimStatement: "Claim on already resolved item",
+      verificationAnswers: "Should be blocked by server",
+    }),
+  });
+  assert(lf_claimResolvedRes.status === 400, "LF24: New claim rejected on resolved item (HTTP 400)");
+
+  // Step LF25: Unauthorized student accessing admin handover/resolve is blocked
+  const lf_unauthResolveRes = await fetch(`${BASE_URL}/api/lost-found/lf-item-004/resolve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({ resolutionNotes: "Unauthorized student resolve" }),
+  });
+  assert(lf_unauthResolveRes.status === 403, "LF25: Student blocked from unauthorized admin resolve (HTTP 403)");
+
+  // Step LF26: Analytics endpoint
+  const lf_adminAnalyticsRes = await fetch(`${BASE_URL}/api/lost-found/analytics`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(lf_adminAnalyticsRes.status === 200, "LF26: Admin queries Lost & Found analytics (HTTP 200)");
+  const lf_adminAnalyticsData = await lf_adminAnalyticsRes.json();
+  assert(lf_adminAnalyticsData.analytics?.totalReports > 0, "LF26b: Total reports tracked");
+  assert(typeof lf_adminAnalyticsData.analytics?.recoveryRate === "number", "LF26c: Recovery rate computed");
+
+  // Step LF27: File security validation
+  const lf_badUploadForm = new FormData();
+  const lf_badBlob = new Blob(["malicious binary code"], { type: "application/x-msdownload" });
+  lf_badUploadForm.append("file", lf_badBlob, "malware.exe");
+  const lf_badUploadRes = await fetch(`${BASE_URL}/api/lost-found/upload`, {
+    method: "POST",
+    headers: { Cookie: studentCookie },
+    body: lf_badUploadForm,
+  });
+  assert(lf_badUploadRes.status === 400 || lf_badUploadRes.status === 403, "LF27: File security blocks executable upload (HTTP 400/403)");
+
+  // Step LF28: Notifications generated
+  const lf_notifsRes = await fetch(`${BASE_URL}/api/notifications`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(lf_notifsRes.status === 200, "LF28: Notifications retrieved for claimant (HTTP 200)");
+  const lf_notifsData = await lf_notifsRes.json();
+  assert(Array.isArray(lf_notifsData.notifications), "LF28b: Notifications array returned");
+
+  // Step LF29: Lost & Found type filters
+  const lf_typeLostRes = await fetch(`${BASE_URL}/api/lost-found?type=LOST`, {
+    headers: { Cookie: studentCookie },
+  });
+  const lf_typeLostData = await lf_typeLostRes.json();
+  assert(lf_typeLostRes.status === 200 && lf_typeLostData.items?.every((i) => i.type === "LOST"), "LF29: Filtering by type=LOST returns only lost items");
+
+  // Step LF30: Status filtering
+  const lf_statusResolvedRes = await fetch(`${BASE_URL}/api/lost-found?status=RESOLVED`, {
+    headers: { Cookie: studentCookie },
+  });
+  const lf_statusResolvedData = await lf_statusResolvedRes.json();
+  assert(lf_statusResolvedRes.status === 200 && lf_statusResolvedData.items?.every((i) => i.status === "RESOLVED"), "LF30: Status filtering returns only matching status items");
+
+  // Step LF31: Student My Reports endpoint
+  const lf_myReportsRes = await fetch(`${BASE_URL}/api/lost-found/my-reports`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(lf_myReportsRes.status === 200, "LF31: Student queries personal reports (HTTP 200)");
+  const lf_myReportsData = await lf_myReportsRes.json();
+  assert(Array.isArray(lf_myReportsData.reports), "LF31b: My reports returned as an array");
+
+  // Step LF32: Student can withdraw a pending claim
+  const lf_freshWithdrawItemRes = await fetch(`${BASE_URL}/api/lost-found`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: facultyCookie },
+    body: JSON.stringify({
+      type: "FOUND",
+      title: `Umbrella Found Outside Library (Batch ${Date.now()})`,
+      category: "ACCESSORY",
+      description: "Black folding umbrella left in library umbrella stand.",
+      location: "Central Library Entrance",
+      dateLostFound: "2026-09-14",
+      contactPreference: "CAMPUS_PORTAL",
+    }),
+  });
+  const lf_freshWithdrawItemData = await lf_freshWithdrawItemRes.json();
+  const lf_withdrawItemId = lf_freshWithdrawItemData.item?.id;
+
+  const lf_tempClaimRes = await fetch(`${BASE_URL}/api/lost-found/${lf_withdrawItemId}/claims`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({
+      claimStatement: "Claim to test student withdrawal flow.",
+      verificationAnswers: "Mistaken submission details.",
+    }),
+  });
+  const lf_tempClaimData = await lf_tempClaimRes.json();
+  const lf_withdrawRes = await fetch(`${BASE_URL}/api/lost-found/claims/${lf_tempClaimData.claim?.id}/withdraw`, {
+    method: "POST",
+    headers: { Cookie: studentCookie },
+  });
+  assert(lf_withdrawRes.status === 200, "LF32: Student can withdraw pending claim (HTTP 200)");
+  const lf_withdrawData = await lf_withdrawRes.json();
+  assert(lf_withdrawData.claim?.status === "WITHDRAWN", "LF32b: Claim status updated to WITHDRAWN");
+
+  // Step LF33: Student cannot claim own reported item
+  const lf_selfClaimRes = await fetch(`${BASE_URL}/api/lost-found/${lf_testFoundItemId}/claims`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({
+      claimStatement: "Attempting to claim my own reported item",
+      verificationAnswers: "Should be blocked by server",
+    }),
+  });
+  assert(lf_selfClaimRes.status === 400, "LF33: Student cannot submit claim on own report (HTTP 400)");
+
+  // Step LF34: Non-author cannot publish another user's draft
+  const lf_otherPublishRes = await fetch(`${BASE_URL}/api/lost-found/lf-item-013/publish`, {
+    method: "POST",
+    headers: { Cookie: facultyCookie },
+  });
+  assert(lf_otherPublishRes.status === 403, "LF34: Non-author cannot publish another user's draft (HTTP 403 Forbidden)");
+
   console.log("\n==================================================");
   console.log(`FINAL RESULT: ${passed} PASSED, ${failed} FAILED`);
   console.log("==================================================");

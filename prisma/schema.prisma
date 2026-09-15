@@ -118,6 +118,7 @@ enum NotificationType {
   NOTICE
   PLACEMENT
   CLUB
+  LOST_FOUND
   SYSTEM
 }
 
@@ -286,6 +287,35 @@ enum Difficulty {
   HARD
 }
 
+enum LostFoundCategory {
+  ELECTRONICS
+  ID_DOCUMENT
+  STUDENT_CARD
+  BOOK
+  BAG
+  CLOTHING
+  KEYS
+  JEWELLERY
+  ACCESSORY
+  STATIONERY
+  SPORTS
+  WALLET
+  WATER_BOTTLE
+  OTHER
+}
+
+enum LostFoundStatus {
+  DRAFT
+  PUBLISHED
+  CLAIM_PENDING
+  VERIFICATION
+  RESOLVED
+  CLOSED
+  EXPIRED
+  ARCHIVED
+  REJECTED
+}
+
 enum LostFoundType {
   LOST
   FOUND
@@ -299,8 +329,12 @@ enum ItemStatus {
 
 enum ClaimStatus {
   PENDING
+  UNDER_REVIEW
+  VERIFIED
   APPROVED
   REJECTED
+  WITHDRAWN
+  COMPLETED
 }
 
 // -------------------------------------------------------------
@@ -1148,39 +1182,89 @@ model QuizAttemptAnswer {
 // -------------------------------------------------------------
 
 model LostFoundItem {
-  id           String           @id @default(uuid())
-  reporterId   String
-  type         LostFoundType
-  title        String
-  description  String
-  category     String           // Electronics, Books/ID, Accessories, Documents, Other
-  location     String
-  dateFoundLost DateTime        @db.Date
-  imageUrl     String?
-  contactInfo  String
-  status       ItemStatus       @default(OPEN)
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  id                  String                @id @default(uuid())
+  referenceNumber     String                @unique
+  reporterId          String
+  type                LostFoundType
+  title               String
+  description         String
+  category            LostFoundCategory
+  status              LostFoundStatus       @default(PUBLISHED)
+  location            String
+  dateLostFound       DateTime              @db.Date
+  timeLostFound       String?
+  imageUrl            String?
+  contactPreference   String                @default("CAMPUS_PORTAL")
+  identifyingDetails  String?
+  resolvedAt          DateTime?
+  resolvedBy          String?
+  resolutionNotes     String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
 
-  reporter     User             @relation(fields: [reporterId], references: [id], onDelete: Cascade)
-  claims       LostFoundClaim[]
+  reporter            User                  @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  claims              LostFoundClaim[]
+  attachments         LostFoundAttachment[]
+  lostMatches         LostFoundMatch[]      @relation("LostItemMatches")
+  foundMatches        LostFoundMatch[]      @relation("FoundItemMatches")
 
   @@index([type, status])
+  @@index([category])
+  @@index([reporterId])
 }
 
 model LostFoundClaim {
-  id               String        @id @default(uuid())
-  itemId           String
-  claimantId       String
-  proofDescription String
-  status           ClaimStatus   @default(PENDING)
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  id                  String         @id @default(uuid())
+  itemId              String
+  claimantId          String
+  claimStatement      String
+  verificationAnswers String
+  status              ClaimStatus    @default(PENDING)
+  submittedAt         DateTime       @default(now())
+  reviewedAt          DateTime?
+  reviewedBy          String?
+  reviewerRemarks     String?
+  resolvedAt          DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
 
-  item             LostFoundItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  claimant         User          @relation(fields: [claimantId], references: [id], onDelete: Cascade)
+  item                LostFoundItem  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  claimant            User           @relation(fields: [claimantId], references: [id], onDelete: Cascade)
 
   @@unique([itemId, claimantId])
+  @@index([status])
+}
+
+model LostFoundAttachment {
+  id        String        @id @default(uuid())
+  itemId    String
+  fileUrl   String
+  fileName  String
+  fileSize  Int
+  mimeType  String
+  createdAt DateTime      @default(now())
+
+  item      LostFoundItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
+}
+
+model LostFoundMatch {
+  id              String        @id @default(uuid())
+  lostItemId      String
+  foundItemId     String
+  matchScore      Int
+  matchingFactors String
+  status          String        @default("SUGGESTED")
+  createdAt       DateTime      @default(now())
+  reviewedAt      DateTime?
+
+  lostItem        LostFoundItem @relation("LostItemMatches", fields: [lostItemId], references: [id], onDelete: Cascade)
+  foundItem       LostFoundItem @relation("FoundItemMatches", fields: [foundItemId], references: [id], onDelete: Cascade)
+
+  @@unique([lostItemId, foundItemId])
+  @@index([lostItemId])
+  @@index([foundItemId])
 }
 
 // -------------------------------------------------------------

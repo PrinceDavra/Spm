@@ -26,6 +26,7 @@ import {
   Building,
   FileCheck,
   Megaphone,
+  Inbox,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -48,7 +49,8 @@ const roleNavItems: Record<Role, NavItem[]> = {
     { name: "Placement Hub", href: "/dashboard/student/placements", icon: Briefcase },
     { name: "My Applications", href: "/dashboard/student/placements/applications", icon: FileCheck },
     { name: "Placement Prep & Quizzes", href: "/dashboard/student/placements/preparation", icon: BookOpen },
-    { name: "Lost & Found", href: "/dashboard/student/lost-found", icon: Search },
+    { name: "Lost & Found Board", href: "/dashboard/student/lost-found", icon: Search },
+    { name: "My Lost & Found Reports", href: "/dashboard/student/lost-found/my-reports", icon: Inbox },
     { name: "My Profile", href: "/dashboard/student/profile", icon: User },
   ],
   FACULTY: [
@@ -61,6 +63,7 @@ const roleNavItems: Record<Role, NavItem[]> = {
     { name: "Post Notice", href: "/dashboard/faculty/notices", icon: Megaphone },
     { name: "Campus Events", href: "/dashboard/faculty/events", icon: Award },
     { name: "Campus Clubs", href: "/dashboard/student/clubs", icon: Users },
+    { name: "Lost & Found Board", href: "/dashboard/student/lost-found", icon: Search },
     { name: "Faculty Profile", href: "/dashboard/faculty/profile", icon: User },
   ],
   ADMIN: [
@@ -77,7 +80,8 @@ const roleNavItems: Record<Role, NavItem[]> = {
     { name: "Event Moderation", href: "/dashboard/admin/events", icon: Award },
     { name: "Club Governance", href: "/dashboard/admin/clubs", icon: Users },
     { name: "Placement Overseer", href: "/dashboard/admin/placements", icon: Briefcase },
-    { name: "Lost & Found Claims", href: "/dashboard/admin/lost-found", icon: Search },
+    { name: "Lost & Found Moderation", href: "/dashboard/admin/lost-found", icon: Search },
+    { name: "Claim Verification Desk", href: "/dashboard/admin/lost-found/claims", icon: FileCheck },
     { name: "Institutional Reports", href: "/dashboard/admin/reports", icon: FileSpreadsheet },
     { name: "Audit Trail Logs", href: "/dashboard/admin/audit-logs", icon: ShieldCheck },
   ],
