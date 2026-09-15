@@ -2850,6 +2850,261 @@ async function runTests() {
   });
   assert(nc_healthCheckRes.status === 200, "NC22: Notification hub operational and responsive (HTTP 200)");
 
+  // =========================================================================
+  // --- PHASE 14 REPORTS, ANALYTICS & ADMIN INTELLIGENCE TESTS ---
+  // =========================================================================
+  console.log("\n--- Phase 14 Reports, Analytics & Admin Intelligence Tests ---");
+
+  // Step AN0: Login Club Coordinator and Placement Officer for Phase 14 RBAC checks
+  const an_clubLoginRes = await fetch(`${BASE_URL}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "club@campussphere.edu", password: "ClubPassword@123" }),
+  });
+  const an_clubCookie = an_clubLoginRes.headers.get("set-cookie") || "";
+  assert(an_clubLoginRes.status === 200, "AN0a: Club Coordinator login succeeds for analytics (HTTP 200)");
+
+  const an_placementLoginRes = await fetch(`${BASE_URL}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "placement@campussphere.edu", password: "PlacementPassword@123" }),
+  });
+  const an_placementCookie = an_placementLoginRes.headers.get("set-cookie") || "";
+  assert(an_placementLoginRes.status === 200, "AN0b: Placement Officer login succeeds for analytics (HTTP 200)");
+
+  // Step AN1: Unauthenticated request to /api/analytics/overview is rejected (HTTP 401)
+  const an_unauthRes = await fetch(`${BASE_URL}/api/analytics/overview`);
+  assert(an_unauthRes.status === 401, "AN1: Unauthenticated analytics overview request rejected (HTTP 401)");
+
+  // Step AN2: Student forbidden from admin analytics overview (HTTP 403)
+  const an_studentOverviewRes = await fetch(`${BASE_URL}/api/analytics/overview`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(an_studentOverviewRes.status === 403, "AN2: Student forbidden from admin analytics overview (HTTP 403)");
+
+  // Step AN3: Admin queries executive overview (HTTP 200)
+  const an_adminOverviewRes = await fetch(`${BASE_URL}/api/analytics/overview`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(an_adminOverviewRes.status === 200, "AN3: Admin queries executive analytics overview (HTTP 200)");
+  const an_overviewData = await an_adminOverviewRes.json();
+
+  // Step AN4: Overview contains 10 master KPI cards
+  const an_kpis = an_overviewData.overview?.kpis;
+  assert(an_kpis && an_kpis.totalStudents && an_kpis.activeFaculty && an_kpis.attendanceHealth, "AN4: Executive overview contains 10 master KPI cards");
+
+  // Step AN5: Overview integrates Configuration Health report
+  const an_health = an_overviewData.overview?.configurationHealth;
+  assert(an_health && ["HEALTHY", "WARNING", "CRITICAL"].includes(an_health.status) && Array.isArray(an_health.checks), "AN5: Executive overview integrates Phase 12 configuration health");
+
+  // Step AN6: Admin queries attendance analytics (HTTP 200)
+  const an_attRes = await fetch(`${BASE_URL}/api/analytics/attendance`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(an_attRes.status === 200, "AN6: Admin queries attendance analytics (HTTP 200)");
+  const an_attData = await an_attRes.json();
+
+  // Step AN7: Attendance analytics contains overallPercentage and safe/warning/critical distribution
+  const an_threshold = an_attData.analytics?.thresholdDistribution;
+  assert(typeof an_attData.analytics?.overallPercentage === "number" && an_threshold?.safeCount !== undefined, "AN7: Attendance analytics contains overallPercentage and risk thresholds");
+
+  // Step AN8: Attendance analytics contains subject-wise and division-wise breakdowns
+  assert(Array.isArray(an_attData.analytics?.subjectWise) && Array.isArray(an_attData.analytics?.divisionWise), "AN8: Attendance analytics provides subject-wise and division-wise breakdowns");
+
+  // Step AN9: Attendance analytics provides theory vs lab metrics
+  const an_tvl = an_attData.analytics?.theoryVsLab;
+  assert(an_tvl && an_tvl.theoryConducted > 0 && an_tvl.labConducted > 0, "AN9: Attendance analytics partitions theory vs practical lab sessions");
+
+  // Step AN10: Admin queries deterministic at-risk student registry (HTTP 200)
+  const an_atRiskRes = await fetch(`${BASE_URL}/api/analytics/at-risk`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(an_atRiskRes.status === 200, "AN10: Admin queries deterministic at-risk registry (HTTP 200)");
+  const an_atRiskData = await an_atRiskRes.json();
+
+  // Step AN11: At-risk response contains students with transparent factor reasons
+  assert(Array.isArray(an_atRiskData.atRiskStudents), "AN11: At-risk student registry returns an evaluated student array");
+
+  // Step AN12: Student blocked from accessing at-risk registry (HTTP 403)
+  const an_studentAtRiskRes = await fetch(`${BASE_URL}/api/analytics/at-risk`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(an_studentAtRiskRes.status === 403, "AN12: Student forbidden from academic at-risk registry (HTTP 403)");
+
+  // Step AN13: Admin queries academic performance (HTTP 200)
+  const an_acadRes = await fetch(`${BASE_URL}/api/analytics/academic`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(an_acadRes.status === 200, "AN13: Admin queries academic performance analytics (HTTP 200)");
+  const an_acadData = await an_acadRes.json();
+
+  // Step AN14: Academic performance contains average marks and grade distribution
+  assert(typeof an_acadData.performance?.averageMarksPercentage === "number" && an_acadData.performance?.gradeDistribution?.gradeA !== undefined, "AN14: Academic performance computes average marks and grade brackets");
+
+  // Step AN15: Admin queries assignment analytics (HTTP 200)
+  const an_asgnRes = await fetch(`${BASE_URL}/api/analytics/assignments`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(an_asgnRes.status === 200, "AN15: Admin queries assignment analytics (HTTP 200)");
+  const an_asgnData = await an_asgnRes.json();
+
+  // Step AN16: Assignment analytics computes submission and on-time rates
+  assert(typeof an_asgnData.analytics?.submissionRate === "number" && typeof an_asgnData.analytics?.onTimeRate === "number", "AN16: Assignment analytics computes submission and on-time metrics");
+
+  // Step AN17: Admin queries faculty workload analytics (HTTP 200)
+  const an_workloadRes = await fetch(`${BASE_URL}/api/analytics/faculty-workload`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(an_workloadRes.status === 200, "AN17: Admin queries faculty workload analytics (HTTP 200)");
+  const an_workloadData = await an_workloadRes.json();
+
+  // Step AN18: Faculty workload distinctly separates assigned vs scheduled hours
+  const an_activeFac = an_workloadData.workload?.facultySummaries?.find((f) => f.assignedWeeklyPeriods > 0);
+  assert(an_activeFac && an_activeFac.assignedWeeklyPeriods > 0 && an_activeFac.scheduledWeeklyPeriods > 0, "AN18: Faculty workload maintains distinct assigned vs scheduled hours");
+
+  // Step AN19: Faculty queries own workload via /api/analytics/faculty-workload (HTTP 200)
+  const an_facSelfWorkloadRes = await fetch(`${BASE_URL}/api/analytics/faculty-workload?facultyId=demo-faculty-001`, {
+    headers: { Cookie: facultyCookie },
+  });
+  assert(an_facSelfWorkloadRes.status === 200, "AN19: Faculty queries own workload analytics (HTTP 200)");
+
+  // Step AN20: Faculty forbidden from querying another faculty's workload ID (HTTP 403)
+  const an_facOtherWorkloadRes = await fetch(`${BASE_URL}/api/analytics/faculty-workload?facultyId=demo-faculty-002`, {
+    headers: { Cookie: facultyCookie },
+  });
+  assert(an_facOtherWorkloadRes.status === 403, "AN20: Faculty forbidden from querying peer faculty workload (HTTP 403)");
+
+  // Step AN21: Admin queries timetable utilization (HTTP 200)
+  const an_ttRes = await fetch(`${BASE_URL}/api/analytics/timetable`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(an_ttRes.status === 200, "AN21: Admin queries timetable & room utilization (HTTP 200)");
+  const an_ttData = await an_ttRes.json();
+
+  // Step AN22: Timetable utilization contains classroom & laboratory utilization rates
+  assert(typeof an_ttData.utilization?.classroomUtilizationRate === "number" && typeof an_ttData.utilization?.laboratoryUtilizationRate === "number", "AN22: Timetable computes classroom and lab utilization rates");
+
+  // Step AN23: Timetable utilization contains period utilization across academic periods
+  assert(Array.isArray(an_ttData.utilization?.periodUtilization) && an_ttData.utilization.periodUtilization.length === 6, "AN23: Period utilization covers 6 daily academic periods");
+
+  // Step AN24: Admin queries event analytics (HTTP 200)
+  const an_evtRes = await fetch(`${BASE_URL}/api/analytics/events`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(an_evtRes.status === 200, "AN24: Admin queries event analytics (HTTP 200)");
+  const an_evtData = await an_evtRes.json();
+
+  // Step AN25: Event analytics contains capacity utilization and category breakdown
+  assert(typeof an_evtData.analytics?.capacityUtilizationRate === "number" && Array.isArray(an_evtData.analytics?.categoryDistribution), "AN25: Event analytics calculates capacity utilization and category distribution");
+
+  // Step AN26: Admin queries club analytics (HTTP 200)
+  const an_clubRes = await fetch(`${BASE_URL}/api/analytics/clubs`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(an_clubRes.status === 200, "AN26: Admin queries club analytics (HTTP 200)");
+  const an_clubData = await an_clubRes.json();
+
+  // Step AN27: Club analytics contains averageEngagementScore and tier distribution
+  assert(typeof an_clubData.analytics?.averageEngagementScore === "number" && an_clubData.analytics?.tierDistribution?.elite !== undefined, "AN27: Club analytics calculates deterministic engagement score and tier index");
+
+  // Step AN28: Club Coordinator queries club analytics (HTTP 200)
+  const an_coordClubRes = await fetch(`${BASE_URL}/api/analytics/clubs`, {
+    headers: { Cookie: an_clubCookie },
+  });
+  assert(an_coordClubRes.status === 200, "AN28: Club Coordinator authorized to access club analytics (HTTP 200)");
+
+  // Step AN29: Admin queries placement analytics (HTTP 200)
+  const an_placeRes = await fetch(`${BASE_URL}/api/analytics/placement`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(an_placeRes.status === 200, "AN29: Admin queries placement analytics (HTTP 200)");
+  const an_placeData = await an_placeRes.json();
+
+  // Step AN30: Placement analytics contains application status pipeline and readiness distribution
+  assert(an_placeData.analytics?.statusFunnel?.applied !== undefined && an_placeData.analytics?.readinessDistribution?.placementReady !== undefined, "AN30: Placement analytics provides hiring pipeline and readiness distribution");
+
+  // Step AN31: Placement Officer queries placement analytics (HTTP 200)
+  const an_officerPlaceRes = await fetch(`${BASE_URL}/api/analytics/placement`, {
+    headers: { Cookie: an_placementCookie },
+  });
+  assert(an_officerPlaceRes.status === 200, "AN31: Placement Officer authorized to access placement analytics (HTTP 200)");
+
+  // Step AN32: Student forbidden from institutional placement analytics (HTTP 403)
+  const an_studentPlaceRes = await fetch(`${BASE_URL}/api/analytics/placement`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(an_studentPlaceRes.status === 403, "AN32: Student forbidden from institutional placement analytics (HTTP 403)");
+
+  // Step AN33: Admin queries lost & found analytics (HTTP 200)
+  const an_lfRes = await fetch(`${BASE_URL}/api/analytics/lost-found`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(an_lfRes.status === 200, "AN33: Admin queries lost & found analytics (HTTP 200)");
+  const an_lfData = await an_lfRes.json();
+
+  // Step AN34: Lost & found analytics contains resolution rate and category distribution
+  assert(typeof an_lfData.analytics?.resolutionRate === "number" && Array.isArray(an_lfData.analytics?.categoryDistribution), "AN34: Lost & found computes recovery rate without exposing private claim data");
+
+  // Step AN35: Admin queries notification analytics (HTTP 200)
+  const an_notifRes = await fetch(`${BASE_URL}/api/analytics/notifications`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(an_notifRes.status === 200, "AN35: Admin queries notification analytics (HTTP 200)");
+  const an_notifData = await an_notifRes.json();
+  assert(typeof an_notifData.analytics?.readRate === "number", "AN35b: Notification analytics contains read rate");
+
+  // Step AN36: Admin queries department comparison benchmarking (HTTP 200)
+  const an_deptCompRes = await fetch(`${BASE_URL}/api/analytics/department-comparison`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(an_deptCompRes.status === 200, "AN36: Admin queries department comparison benchmarking (HTTP 200)");
+  const an_deptCompData = await an_deptCompRes.json();
+  assert(Array.isArray(an_deptCompData.comparison) && an_deptCompData.comparison.length > 0, "AN36b: Department comparison returns accredited branches array");
+
+  // Step AN37: Student queries own personal analytics via /api/analytics/student (HTTP 200)
+  const an_studentSelfRes = await fetch(`${BASE_URL}/api/analytics/student`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(an_studentSelfRes.status === 200, "AN37: Student queries personal academic analytics (HTTP 200)");
+  const an_studentSelfData = await an_studentSelfRes.json();
+  assert(an_studentSelfData.analytics?.student?.rollNumber === "22COMPA101", "AN37b: Student receives own personal roll number");
+
+  // Step AN38: Student IDOR attempt to view peer student analytics is blocked (HTTP 403)
+  const an_studentIdorRes = await fetch(`${BASE_URL}/api/analytics/student?studentId=demo-student-002`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(an_studentIdorRes.status === 403, "AN38: Student IDOR access attempt to peer analytics blocked (HTTP 403)");
+
+  // Step AN39: Faculty queries teaching analytics via /api/analytics/faculty (HTTP 200)
+  const an_facSelfRes = await fetch(`${BASE_URL}/api/analytics/faculty`, {
+    headers: { Cookie: facultyCookie },
+  });
+  assert(an_facSelfRes.status === 200, "AN39: Faculty queries personal teaching analytics (HTTP 200)");
+  const an_facSelfData = await an_facSelfRes.json();
+  assert(an_facSelfData.analytics?.faculty?.name?.includes("Meera"), "AN39b: Faculty receives authorized personal teaching stats");
+
+  // Step AN40: Admin exports attendance summary CSV (HTTP 200, text/csv)
+  const an_exportAttRes = await fetch(`${BASE_URL}/api/analytics/export/attendance`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(an_exportAttRes.status === 200, "AN40: Admin exports attendance summary CSV (HTTP 200)");
+  const an_attContentType = an_exportAttRes.headers.get("content-type") || "";
+  assert(an_attContentType.includes("text/csv"), "AN40b: Export response Content-Type is text/csv");
+  const an_attCsvText = await an_exportAttRes.text();
+  assert(an_attCsvText.includes("Student ID,Roll Number,Student Name"), "AN40c: CSV payload contains RFC 4180 headers");
+
+  // Step AN41: Placement Officer exports placement CSV (HTTP 200, text/csv)
+  const an_exportPlaceRes = await fetch(`${BASE_URL}/api/analytics/export/placement`, {
+    headers: { Cookie: an_placementCookie },
+  });
+  assert(an_exportPlaceRes.status === 200, "AN41: Placement Officer exports placement CSV (HTTP 200)");
+
+  // Step AN42: Student blocked from downloading administrative CSV exports (HTTP 403)
+  const an_studentExportRes = await fetch(`${BASE_URL}/api/analytics/export/attendance`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(an_studentExportRes.status === 403, "AN42: Student blocked from administrative CSV export (HTTP 403)");
+
   console.log("\n==================================================");
   console.log(`FINAL RESULT: ${passed} PASSED, ${failed} FAILED`);
   console.log("==================================================");

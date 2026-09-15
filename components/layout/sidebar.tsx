@@ -42,6 +42,7 @@ const roleNavItems: Record<Role, NavItem[]> = {
   STUDENT: [
     { name: "Overview", href: "/dashboard/student", icon: LayoutDashboard },
     { name: "Notification Hub", href: "/dashboard/notifications", icon: BellRing },
+    { name: "Academic Analytics", href: "/dashboard/student/analytics", icon: Activity },
     { name: "Attendance & Risk", href: "/dashboard/student/attendance", icon: TrendingUp },
     { name: "Weekly Timetable", href: "/dashboard/student/timetable", icon: CalendarDays },
     { name: "Assignments", href: "/dashboard/student/assignments", icon: CheckCircle2 },
@@ -59,6 +60,7 @@ const roleNavItems: Record<Role, NavItem[]> = {
   FACULTY: [
     { name: "Overview", href: "/dashboard/faculty", icon: LayoutDashboard },
     { name: "Notification Hub", href: "/dashboard/notifications", icon: BellRing },
+    { name: "Teaching Analytics", href: "/dashboard/faculty/analytics", icon: TrendingUp },
     { name: "Mark Attendance", href: "/dashboard/faculty/attendance/mark", icon: ClipboardList },
     { name: "Attendance Logs", href: "/dashboard/faculty/attendance/history", icon: History },
     { name: "Teaching Schedule", href: "/dashboard/faculty/timetable", icon: CalendarDays },
@@ -73,6 +75,7 @@ const roleNavItems: Record<Role, NavItem[]> = {
   ADMIN: [
     { name: "Master Dashboard", href: "/dashboard/admin", icon: LayoutDashboard },
     { name: "Notification Hub", href: "/dashboard/notifications", icon: BellRing },
+    { name: "Analytics & Intelligence", href: "/dashboard/admin/analytics", icon: TrendingUp },
     { name: "Academic Setup", href: "/dashboard/admin/academic", icon: Sparkles },
     { name: "Departments", href: "/dashboard/admin/departments", icon: Building2 },
     { name: "Programs & Batches", href: "/dashboard/admin/programs", icon: GraduationCap },
@@ -89,7 +92,6 @@ const roleNavItems: Record<Role, NavItem[]> = {
     { name: "Placement Overseer", href: "/dashboard/admin/placements", icon: Briefcase },
     { name: "Lost & Found Moderation", href: "/dashboard/admin/lost-found", icon: Search },
     { name: "Claim Verification Desk", href: "/dashboard/admin/lost-found/claims", icon: FileCheck },
-    { name: "Institutional Reports", href: "/dashboard/admin/reports", icon: FileSpreadsheet },
     { name: "Audit Trail Logs", href: "/dashboard/admin/audit-logs", icon: ShieldCheck },
   ],
   PLACEMENT_OFFICER: [
@@ -104,6 +106,7 @@ const roleNavItems: Record<Role, NavItem[]> = {
   CLUB_COORDINATOR: [
     { name: "Station Overview", href: "/dashboard/club", icon: LayoutDashboard },
     { name: "Notification Hub", href: "/dashboard/notifications", icon: BellRing },
+    { name: "Club Analytics", href: "/dashboard/club/analytics", icon: TrendingUp },
     { name: "Membership Roster", href: "/dashboard/club/members", icon: CheckCircle2 },
     { name: "Club Activities", href: "/dashboard/club/activities", icon: CalendarDays },
     { name: "Club Events", href: "/dashboard/club/events", icon: Award },
