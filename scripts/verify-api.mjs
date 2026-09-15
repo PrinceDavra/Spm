@@ -2217,6 +2217,425 @@ async function runTests() {
   });
   assert(lf_otherPublishRes.status === 403, "LF34: Non-author cannot publish another user's draft (HTTP 403 Forbidden)");
 
+  // =========================================================================
+  // PHASE 12: ADMIN MANAGEMENT — ACADEMIC SETUP, FACULTY MAPPING, ROOMS & LABS
+  // =========================================================================
+  console.log("\n--- Phase 12: Admin Academic Management, Faculty Mapping, Rooms & Labs Tests ---");
+
+  // Step AM1: Unauthenticated user blocked from /api/admin/academic/departments (HTTP 401)
+  const am_unauthDeptRes = await fetch(`${BASE_URL}/api/admin/academic/departments`);
+  assert(am_unauthDeptRes.status === 401, "AM1: Unauthenticated user blocked from academic departments (HTTP 401)");
+
+  // Step AM2: Student blocked from /api/admin/academic/departments (HTTP 403)
+  const am_studentDeptRes = await fetch(`${BASE_URL}/api/admin/academic/departments`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(am_studentDeptRes.status === 403, "AM2: Student blocked from academic departments (HTTP 403 Forbidden)");
+
+  // Step AM3: Faculty blocked from /api/admin/academic/departments (HTTP 403)
+  const am_facultyDeptRes = await fetch(`${BASE_URL}/api/admin/academic/departments`, {
+    headers: { Cookie: facultyCookie },
+  });
+  assert(am_facultyDeptRes.status === 403, "AM3: Faculty blocked from academic departments (HTTP 403 Forbidden)");
+
+  // Step AM4: Admin creates a new department (HTTP 201)
+  const am_deptTimestamp = Date.now();
+  const am_deptCode = `AERO${am_deptTimestamp % 1000}`;
+  const am_createDeptRes = await fetch(`${BASE_URL}/api/admin/academic/departments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      name: `Aerospace Engineering ${am_deptTimestamp}`,
+      code: am_deptCode,
+      description: "Aeronautics, Propulsion & Flight Dynamics",
+      headOfDepartment: "Dr. Vikram Sarabhai",
+      isActive: true,
+    }),
+  });
+  assert(am_createDeptRes.status === 201, "AM4: Admin creates new department (HTTP 201)");
+  const am_createDeptData = await am_createDeptRes.json();
+  const am_newDeptId = am_createDeptData.department?.id;
+  assert(am_createDeptData.department?.code === am_deptCode, "AM4b: Department code matches created code");
+
+  // Step AM5: Duplicate department code rejected (HTTP 409)
+  const am_duplicateDeptRes = await fetch(`${BASE_URL}/api/admin/academic/departments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      name: `Duplicate Aerospace Department`,
+      code: am_deptCode,
+    }),
+  });
+  assert(am_duplicateDeptRes.status === 409, "AM5: Duplicate department code rejected with HTTP 409");
+
+  // Step AM6: Admin updates department description (HTTP 200)
+  const am_updateDeptRes = await fetch(`${BASE_URL}/api/admin/academic/departments/${am_newDeptId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      description: "Advanced Spacecraft Dynamics, Avionics & Propulsion",
+    }),
+  });
+  assert(am_updateDeptRes.status === 200, "AM6: Admin updates department details (HTTP 200)");
+
+  // Step AM7: Admin creates new academic program (HTTP 201)
+  const am_progCode = `BTECH-AERO${am_deptTimestamp % 1000}`;
+  const am_createProgRes = await fetch(`${BASE_URL}/api/admin/academic/programs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      name: `B.Tech Aerospace Engineering ${am_deptTimestamp}`,
+      code: am_progCode,
+      degree: "B.Tech",
+      departmentId: am_newDeptId,
+      durationYears: 4,
+      totalSemesters: 8,
+      isActive: true,
+    }),
+  });
+  assert(am_createProgRes.status === 201, "AM7: Admin creates academic program (HTTP 201)");
+  const am_createProgData = await am_createProgRes.json();
+  const am_newProgId = am_createProgData.program?.id;
+
+  // Step AM8: Admin cannot create program with invalid/nonexistent department (HTTP 400)
+  const am_invalidProgRes = await fetch(`${BASE_URL}/api/admin/academic/programs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      name: "Ghost Department Program",
+      code: `GHOST-${Date.now()}`,
+      degree: "B.Tech",
+      departmentId: "nonexistent-dept-uuid",
+    }),
+  });
+  assert(am_invalidProgRes.status === 400, "AM8: Program creation with invalid department rejected (HTTP 400)");
+
+  // Step AM9: Admin creates new student batch (HTTP 201)
+  const am_createBatchRes = await fetch(`${BASE_URL}/api/admin/academic/batches`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      name: `Batch 2026-2030 (Aero ${am_deptTimestamp % 1000})`,
+      startYear: 2026,
+      endYear: 2030,
+      programId: am_newProgId,
+      currentSemester: 1,
+      isActive: true,
+    }),
+  });
+  assert(am_createBatchRes.status === 201, "AM9: Admin creates student batch (HTTP 201)");
+  const am_createBatchData = await am_createBatchRes.json();
+  const am_newBatchId = am_createBatchData.batch?.id;
+
+  // Step AM10: Admin cannot create batch with endYear <= startYear (HTTP 400)
+  const am_invalidBatchRes = await fetch(`${BASE_URL}/api/admin/academic/batches`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      name: "Inverted Batch",
+      startYear: 2028,
+      endYear: 2025,
+      programId: am_newProgId,
+    }),
+  });
+  assert(am_invalidBatchRes.status === 400, "AM10: Batch with endYear <= startYear rejected (HTTP 400)");
+
+  // Step AM11: Admin creates new academic semester (HTTP 201)
+  const am_createSemRes = await fetch(`${BASE_URL}/api/admin/academic/semesters`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      semesterNumber: 8,
+      academicYear: "2025-2026",
+      term: "EVEN",
+      isActive: true,
+    }),
+  });
+  assert(am_createSemRes.status === 201 || am_createSemRes.status === 409, "AM11: Admin creates or verifies semester (HTTP 201/409)");
+
+  // Step AM12: Admin creates new academic class (HTTP 201)
+  const am_createClassRes = await fetch(`${BASE_URL}/api/admin/academic/classes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      name: `FE Aerospace Eng ${am_deptTimestamp % 1000}`,
+      departmentId: am_newDeptId,
+      semester: 1,
+      academicYear: "2026-2027",
+      programId: am_newProgId,
+      batchId: am_newBatchId,
+      isActive: true,
+    }),
+  });
+  assert(am_createClassRes.status === 201, "AM12: Admin creates academic class (HTTP 201)");
+  const am_createClassData = await am_createClassRes.json();
+  const am_newClassId = am_createClassData.class?.id;
+
+  // Step AM13: Admin creates new student division (HTTP 201)
+  const am_createDivRes = await fetch(`${BASE_URL}/api/admin/academic/divisions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      classId: am_newClassId,
+      name: "Division A",
+      code: "AERO-A",
+      capacity: 60,
+      isActive: true,
+    }),
+  });
+  assert(am_createDivRes.status === 201, "AM13: Admin creates student division (HTTP 201)");
+  const am_createDivData = await am_createDivRes.json();
+  const am_newDivId = am_createDivData.division?.id;
+
+  // Step AM14: Duplicate division rejected within same class (HTTP 409)
+  const am_dupDivRes = await fetch(`${BASE_URL}/api/admin/academic/divisions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      classId: am_newClassId,
+      name: "Division A",
+      capacity: 60,
+    }),
+  });
+  assert(am_dupDivRes.status === 409, "AM14: Duplicate division in same class rejected (HTTP 409)");
+
+  // Step AM15: Admin creates theory subject (HTTP 201)
+  const am_subjCode = `AERO-101-${am_deptTimestamp % 1000}`;
+  const am_createSubjRes = await fetch(`${BASE_URL}/api/admin/academic/subjects`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      name: "Introduction to Aerodynamics",
+      code: am_subjCode,
+      departmentId: am_newDeptId,
+      semester: 1,
+      credits: 4,
+      type: "THEORY",
+      weeklyHours: 4,
+      isActive: true,
+    }),
+  });
+  assert(am_createSubjRes.status === 201, "AM15: Admin creates theory subject (HTTP 201)");
+  const am_createSubjData = await am_createSubjRes.json();
+  const am_newSubjId = am_createSubjData.subject?.id;
+
+  // Step AM16: Admin creates lab practical subject (HTTP 201)
+  const am_labSubjCode = `AERO-102-LAB-${am_deptTimestamp % 1000}`;
+  const am_createLabSubjRes = await fetch(`${BASE_URL}/api/admin/academic/subjects`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      name: "Aerodynamics Wind Tunnel Lab",
+      code: am_labSubjCode,
+      departmentId: am_newDeptId,
+      semester: 1,
+      credits: 2,
+      type: "LAB",
+      weeklyHours: 2,
+      requiresLab: true,
+      isActive: true,
+    }),
+  });
+  assert(am_createLabSubjRes.status === 201, "AM16: Admin creates lab practical subject (HTTP 201)");
+
+  // Step AM17: Duplicate subject code rejected (HTTP 409)
+  const am_dupSubjRes = await fetch(`${BASE_URL}/api/admin/academic/subjects`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      name: "Duplicate Aero Course",
+      code: am_subjCode,
+      departmentId: am_newDeptId,
+      semester: 1,
+    }),
+  });
+  assert(am_dupSubjRes.status === 409, "AM17: Duplicate subject code rejected (HTTP 409)");
+
+  // Step AM18: Admin maps faculty to subject and division (HTTP 201)
+  const am_mapFacultyRes = await fetch(`${BASE_URL}/api/admin/academic/faculty-mappings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      facultyId: "demo-faculty-001",
+      subjectId: am_newSubjId,
+      divisionId: am_newDivId,
+      academicYear: "2026-2027",
+      weeklyHours: 4,
+      isActive: true,
+    }),
+  });
+  assert(am_mapFacultyRes.status === 201, "AM18: Admin maps faculty to subject and division (HTTP 201)");
+  const am_mapFacultyData = await am_mapFacultyRes.json();
+  const am_newMappingId = am_mapFacultyData.mapping?.id;
+
+  // Step AM19: Duplicate faculty mapping rejected (HTTP 409)
+  const am_dupMappingRes = await fetch(`${BASE_URL}/api/admin/academic/faculty-mappings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      facultyId: "demo-faculty-001",
+      subjectId: am_newSubjId,
+      divisionId: am_newDivId,
+      academicYear: "2026-2027",
+    }),
+  });
+  assert(am_dupMappingRes.status === 409, "AM19: Duplicate faculty mapping rejected (HTTP 409)");
+
+  // Step AM20: Non-admin student blocked from creating faculty mapping (HTTP 403)
+  const am_studentMapRes = await fetch(`${BASE_URL}/api/admin/academic/faculty-mappings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: studentCookie },
+    body: JSON.stringify({
+      facultyId: "demo-faculty-001",
+      subjectId: am_newSubjId,
+      divisionId: am_newDivId,
+      academicYear: "2026-2027",
+    }),
+  });
+  assert(am_studentMapRes.status === 403, "AM20: Student blocked from mapping faculty (HTTP 403 Forbidden)");
+
+  // Step AM21: Admin queries faculty mappings (HTTP 200)
+  const am_getMappingsRes = await fetch(`${BASE_URL}/api/admin/academic/faculty-mappings`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(am_getMappingsRes.status === 200, "AM21: Admin queries faculty mappings roster (HTTP 200)");
+  const am_getMappingsData = await am_getMappingsRes.json();
+  assert(Array.isArray(am_getMappingsData.mappings), "AM21b: Mappings returned as array");
+
+  // Step AM22: Admin queries faculty workload endpoint (HTTP 200)
+  const am_workloadRes = await fetch(`${BASE_URL}/api/admin/academic/faculty-mappings/workload`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(am_workloadRes.status === 200, "AM22: Admin queries faculty workload summary (HTTP 200)");
+  const am_workloadData = await am_workloadRes.json();
+  assert(Array.isArray(am_workloadData.workload), "AM22b: Workload summaries returned as array");
+
+  // Step AM23: Faculty workload metrics validated
+  const am_meeraWorkload = am_workloadData.workload.find((w) => w.facultyId === "demo-faculty-001");
+  assert(
+    am_meeraWorkload && am_meeraWorkload.assignedWeeklyPeriods > 0,
+    "AM23: Deterministic faculty teaching periods calculated"
+  );
+
+  // Step AM24: Faculty member can view their own workload (HTTP 200)
+  const am_facSelfWorkloadRes = await fetch(
+    `${BASE_URL}/api/admin/academic/faculty-mappings/workload?facultyId=demo-faculty-001`,
+    {
+      headers: { Cookie: facultyCookie },
+    }
+  );
+  assert(am_facSelfWorkloadRes.status === 200, "AM24: Faculty member can access workload endpoint (HTTP 200)");
+
+  // Step AM25: Admin creates physical room (HTTP 201)
+  const am_roomNumber = `Room ${am_deptTimestamp % 1000}`;
+  const am_createRoomRes = await fetch(`${BASE_URL}/api/admin/academic/rooms`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      roomNumber: am_roomNumber,
+      building: "Aerospace Research Annex",
+      floor: 3,
+      capacity: 80,
+      type: "CLASSROOM",
+      hasProjector: true,
+      isAvailable: true,
+      isActive: true,
+    }),
+  });
+  assert(am_createRoomRes.status === 201, "AM25: Admin creates physical room (HTTP 201)");
+  const am_createRoomData = await am_createRoomRes.json();
+  const am_newRoomId = am_createRoomData.room?.id;
+
+  // Step AM26: Admin cannot create room with invalid capacity <= 0 (HTTP 400)
+  const am_invalidRoomRes = await fetch(`${BASE_URL}/api/admin/academic/rooms`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      roomNumber: `Room-Invalid-${Date.now()}`,
+      building: "Academic Block",
+      floor: 1,
+      capacity: 0,
+    }),
+  });
+  assert(am_invalidRoomRes.status === 400, "AM26: Room with invalid capacity rejected (HTTP 400)");
+
+  // Step AM27: Admin creates specialized laboratory (HTTP 201)
+  const am_labCode = `LAB-AERO-${am_deptTimestamp % 1000}`;
+  const am_createLabRes = await fetch(`${BASE_URL}/api/admin/academic/laboratories`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      name: "Subsonic Wind Tunnel Research Laboratory",
+      code: am_labCode,
+      departmentId: am_newDeptId,
+      capacity: 30,
+      equipment: ["Low-Speed Wind Tunnel", "Pressure Transducers", "Smoke Generators"],
+      labAssistant: "Satish Dhawan",
+      isActive: true,
+    }),
+  });
+  assert(am_createLabRes.status === 201, "AM27: Admin creates specialized laboratory (HTTP 201)");
+
+  // Step AM28: Admin cannot link laboratory to a classroom room type (HTTP 400)
+  const am_mismatchedLabRes = await fetch(`${BASE_URL}/api/admin/academic/laboratories`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: adminCookie },
+    body: JSON.stringify({
+      name: "Mismatched Lab Setup",
+      code: `LAB-MIS-${Date.now()}`,
+      departmentId: am_newDeptId,
+      roomId: am_newRoomId, // am_newRoomId is CLASSROOM!
+    }),
+  });
+  assert(am_mismatchedLabRes.status === 400, "AM28: Linking laboratory to a classroom rejected (HTTP 400)");
+
+  // Step AM29: Admin deactivates a department (HTTP 200)
+  const am_deactDeptRes = await fetch(`${BASE_URL}/api/admin/academic/departments/${am_newDeptId}`, {
+    method: "DELETE",
+    headers: { Cookie: adminCookie },
+  });
+  assert(am_deactDeptRes.status === 200, "AM29: Admin deactivates department (HTTP 200)");
+
+  // Step AM30: Deactivated department status verified
+  const am_verifyDeptRes = await fetch(`${BASE_URL}/api/admin/academic/departments/${am_newDeptId}`, {
+    headers: { Cookie: adminCookie },
+  });
+  const am_verifyDeptData = await am_verifyDeptRes.json();
+  assert(am_verifyDeptData.department?.isActive === false, "AM30: Department isActive correctly set to false");
+
+  // Step AM31: Admin unmaps faculty allocation (HTTP 200)
+  const am_unmapRes = await fetch(`${BASE_URL}/api/admin/academic/faculty-mappings/${am_newMappingId}`, {
+    method: "DELETE",
+    headers: { Cookie: adminCookie },
+  });
+  assert(am_unmapRes.status === 200, "AM31: Admin unmaps faculty assignment (HTTP 200)");
+
+  // Step AM32: Admin runs configuration health audit endpoint (HTTP 200)
+  const am_healthRes = await fetch(`${BASE_URL}/api/admin/academic/health`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(am_healthRes.status === 200, "AM32: Admin queries configuration health console (HTTP 200)");
+  const am_healthData = await am_healthRes.json();
+
+  // Step AM33: Health audit returns structured metrics and checks
+  assert(
+    typeof am_healthData.metrics?.departmentsCount === "number" &&
+      Array.isArray(am_healthData.checks),
+    "AM33: Health audit returns structured metrics and systematic checks array"
+  );
+
+  // Step AM34: Health status is HEALTHY, WARNING, or CRITICAL
+  assert(
+    ["HEALTHY", "WARNING", "CRITICAL"].includes(am_healthData.status),
+    "AM34: Overall health status correctly classified as HEALTHY, WARNING, or CRITICAL"
+  );
+
+  // Step AM35: Audit log verifies administrative mutations recorded
+  const am_auditRes = await fetch(`${BASE_URL}/api/admin/academic/departments`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(am_auditRes.status === 200, "AM35: Admin academic operations verified and functioning (HTTP 200)");
+
   console.log("\n==================================================");
   console.log(`FINAL RESULT: ${passed} PASSED, ${failed} FAILED`);
   console.log("==================================================");

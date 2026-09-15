@@ -27,6 +27,8 @@ import {
   FileCheck,
   Megaphone,
   Inbox,
+  Sparkles,
+  Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -68,12 +70,14 @@ const roleNavItems: Record<Role, NavItem[]> = {
   ],
   ADMIN: [
     { name: "Master Dashboard", href: "/dashboard/admin", icon: LayoutDashboard },
-    { name: "User Directory", href: "/dashboard/admin/users", icon: Users },
+    { name: "Academic Setup", href: "/dashboard/admin/academic", icon: Sparkles },
     { name: "Departments", href: "/dashboard/admin/departments", icon: Building2 },
+    { name: "Programs & Batches", href: "/dashboard/admin/programs", icon: GraduationCap },
     { name: "Classes & Divisions", href: "/dashboard/admin/classes", icon: Layers },
     { name: "Subjects & Syllabus", href: "/dashboard/admin/subjects", icon: BookOpen },
     { name: "Faculty Allocation", href: "/dashboard/admin/faculty-mapping", icon: Sliders },
     { name: "Rooms & Labs", href: "/dashboard/admin/rooms", icon: Building },
+    { name: "Configuration Health", href: "/dashboard/admin/configuration-health", icon: Activity },
     { name: "Timetable Generator", href: "/dashboard/admin/timetable", icon: CalendarDays },
     { name: "Attendance Audit", href: "/dashboard/admin/attendance", icon: TrendingUp },
     { name: "Campus Notices", href: "/dashboard/admin/notices", icon: BellRing },
