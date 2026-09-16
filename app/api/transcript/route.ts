@@ -14,14 +14,18 @@ export async function GET(request: NextRequest) {
 
   let targetStudentId = session.id;
 
-  // Strict IDOR protection
+  // Strict IDOR protection and server-side RBAC
   if (session.role === Role.STUDENT) {
     if (requestedStudentId && requestedStudentId !== session.id && requestedStudentId !== "demo-student-001") {
       return NextResponse.json({ error: "Forbidden: Cannot access academic transcript of another student" }, { status: 403 });
     }
     targetStudentId = session.id;
-  } else if (requestedStudentId) {
-    targetStudentId = requestedStudentId;
+  } else if (session.role === Role.ADMIN || session.role === Role.FACULTY) {
+    if (requestedStudentId) {
+      targetStudentId = requestedStudentId;
+    }
+  } else {
+    return NextResponse.json({ error: "Forbidden: Insufficient privileges to access academic transcripts" }, { status: 403 });
   }
 
   try {

@@ -3552,6 +3552,72 @@ async function runTests() {
   assert(ex_integratedAcadData.performance?.examSummary !== undefined, "EX41b: Academic analytics integrates authoritative examSummary");
   assert(typeof ex_integratedAcadData.performance?.examSummary?.averageExamMarks === "number", "EX41c: Integrated examSummary calculates averageExamMarks");
 
+  // =========================================================================
+  // PHASE 16 — FINAL INTEGRATION, SECURITY & DEPLOYMENT VERIFICATION
+  // =========================================================================
+  console.log("\n--- Phase 16 Final Integration, Security & Deployment Tests ---");
+
+  // Step P16_01: Production security headers present on responses
+  const secHeaderRes = await fetch(`${BASE_URL}/login`);
+  assert(secHeaderRes.headers.get("x-content-type-options") === "nosniff", "P16_01a: X-Content-Type-Options header is nosniff");
+  assert(secHeaderRes.headers.get("x-frame-options") === "SAMEORIGIN", "P16_01b: X-Frame-Options header is SAMEORIGIN");
+  assert(secHeaderRes.headers.get("referrer-policy") === "strict-origin-when-cross-origin", "P16_01c: Referrer-Policy header is strict-origin-when-cross-origin");
+
+  // Step P16_02: Club Coordinator blocked from querying student academic results (HTTP 403)
+  const p16_clubResultsRes = await fetch(`${BASE_URL}/api/results/student?studentId=demo-student-001`, {
+    headers: { Cookie: an_clubCookie },
+  });
+  assert(p16_clubResultsRes.status === 403, "P16_02: Club Coordinator blocked from student academic results (HTTP 403)");
+
+  // Step P16_03: Placement Officer blocked from querying student academic transcript (HTTP 403)
+  const p16_placementTransRes = await fetch(`${BASE_URL}/api/transcript?studentId=demo-student-001`, {
+    headers: { Cookie: an_placementCookie },
+  });
+  assert(p16_placementTransRes.status === 403, "P16_03: Placement Officer blocked from student academic transcript (HTTP 403)");
+
+  // Step P16_04: Placement Officer blocked from exporting student academic transcript (HTTP 403)
+  const p16_placementExportRes = await fetch(`${BASE_URL}/api/transcript/export?studentId=demo-student-001`, {
+    headers: { Cookie: an_placementCookie },
+  });
+  assert(p16_placementExportRes.status === 403, "P16_04: Placement Officer blocked from exporting academic transcript (HTTP 403)");
+
+  // Step P16_05: Nonexistent page route triggers 404 response
+  const p16_notFoundRes = await fetch(`${BASE_URL}/nonexistent-route-404-test`);
+  assert(p16_notFoundRes.status === 404, "P16_05: Nonexistent route triggers HTTP 404");
+
+  // Step P16_06: Unauthorized error boundary page renders (HTTP 200)
+  const p16_unauthPageRes = await fetch(`${BASE_URL}/unauthorized?required=ADMIN&current=STUDENT`, {
+    headers: { Cookie: studentCookie },
+  });
+  assert(p16_unauthPageRes.status === 200, "P16_06: Unauthorized boundary page renders (HTTP 200)");
+
+  // Step P16_07: System administrative check returns healthy status (HTTP 200)
+  const p16_sysCheckRes = await fetch(`${BASE_URL}/api/admin/system-check`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert(p16_sysCheckRes.status === 200, "P16_07: Admin system-check returns HTTP 200");
+  const p16_sysCheckData = await p16_sysCheckRes.json();
+  assert(p16_sysCheckData.success === true, "P16_07b: System health status reports operational");
+
+  // Step P16_08: File upload rejects blocked executable extensions (HTTP 403)
+  const boundary = "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
+  const fakeExeBody = 
+    `--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="file"; filename="dangerous_exploit.exe"\r\n` +
+    `Content-Type: application/x-msdownload\r\n\r\n` +
+    `MZBINARYMOCKPAYLOAD\r\n` +
+    `--${boundary}--\r\n`;
+
+  const p16_uploadSecRes = await fetch(`${BASE_URL}/api/assignments/upload`, {
+    method: "POST",
+    headers: {
+      Cookie: studentCookie,
+      "Content-Type": `multipart/form-data; boundary=${boundary}`,
+    },
+    body: fakeExeBody,
+  });
+  assert(p16_uploadSecRes.status === 403, "P16_08: Assignment upload blocks executable files (HTTP 403)");
+
   console.log("\n==================================================");
   console.log(`FINAL RESULT: ${passed} PASSED, ${failed} FAILED`);
   console.log("==================================================");

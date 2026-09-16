@@ -16,14 +16,18 @@ export async function GET(request: NextRequest) {
 
   let targetStudentId = session.id;
 
-  // Enforce zero-trust IDOR security
+  // Enforce zero-trust IDOR security and server-side RBAC
   if (session.role === Role.STUDENT) {
     if (requestedStudentId && requestedStudentId !== session.id && requestedStudentId !== "demo-student-001") {
       return NextResponse.json({ error: "Forbidden: Cannot access academic results of another student" }, { status: 403 });
     }
     targetStudentId = session.id;
-  } else if (requestedStudentId) {
-    targetStudentId = requestedStudentId;
+  } else if (session.role === Role.ADMIN || session.role === Role.FACULTY) {
+    if (requestedStudentId) {
+      targetStudentId = requestedStudentId;
+    }
+  } else {
+    return NextResponse.json({ error: "Forbidden: Insufficient privileges to access academic results" }, { status: 403 });
   }
 
   try {
